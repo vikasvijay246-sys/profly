@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Payments — PropFlow{% endblock %}
+{% block page_title %}Payments{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="card" style="padding:14px 20px;margin-bottom:16px">
+  <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <select name="status" class="form-input" style="width:160px" onchange="this.form.submit()">
+      <option value="">All Statuses</option>
+      <option value="pending"   {% if status_filter=='pending'   %}selected{% endif %}>⏳ Pending</option>
+      <option value="overdue"   {% if status_filter=='overdue'   %}selected{% endif %}>⚠️ Overdue</option>
+      <option value="completed" {% if status_filter=='completed' %}selected{% endif %}>✅ Paid</option>
+    </select>
+    <select name="month" class="form-input" style="width:160px" onchange="this.form.submit()">
+      <option value="">All Months</option>
+      {% for m in available_months %}
+      <option value="{{ m }}" {% if month_filter==m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+    {% if status_filter or month_filter %}
+    <a href="{{ url_for('owner.payments') }}" class="btn btn-ghost btn-sm">✕ Clear</a>
+    {% endif %}
+    <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addPayModal')" style="margin-left:auto">
+      + Create
+    </button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Payments <span class="badge-count">{{ payments|length }}</span></h2>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Tenant</th><th>Month</th><th>Amount</th><th>Status</th><th>Due</th><th>Paid At</th><th>Txn</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr>
+          <td>
+            <div class="user-cell">
+              <div class="avatar avatar-sm">{{ p.tenant.full_name[0].upper() if p.tenant else '?' }}</div>
+              {{ p.tenant.full_name if p.tenant else '—' }}
+            </div>
+          </td>
+          <td><span class="month-tag">{{ p.rent_month or '—' }}</span></td>
+          <td><strong>₹{{ "{:,.0f}".format(p.amount) }}</strong></td>
+          <td>
+            {% if p.status == 'completed' %}<span class="badge badge-completed">✅ Paid</span>
+            {% elif p.status == 'overdue'  %}<span class="badge badge-overdue">⚠️ Overdue</span>
+            {% elif p.status == 'pending'  %}<span class="badge badge-pending">⏳ Pending</span>
+            {% else %}<span class="badge badge-failed">{{ p.status }}</span>{% endif %}
+          </td>
+          <td class="text-muted">{{ p.due_date.strftime('%d-%m-%Y') if p.due_date else '—' }}</td>
+          <td class="text-muted">{{ p.paid_at.strftime('%d-%m-%Y') if p.paid_at else '—' }}</td>
+          <td style="font-size:11px;font-family:monospace;color:var(--muted)">{{ p.transaction_id[:12] ~ '…' if p.transaction_id else '—' }}</td>
+          <td>
+            <div class="action-btns">
+              {% if p.status != 'completed' %}
+              <form method="POST" action="{{ url_for('owner.update_payment', pid=p.id) }}" style="display:inline">
+                <input type="hidden" name="status" value="completed"/>
+                <button class="btn btn-primary btn-xs">✅ Paid</button>
+              </form>
+              {% endif %}
+              <button class="btn btn-ghost btn-xs" onclick="openStatusModal({{ p.id }}, '{{ p.status }}')">Edit</button>
+              <form method="POST" action="{{ url_for('owner.delete_payment', pid=p.id) }}" style="display:inline"
+                    onsubmit="return confirm('Delete payment?')">
+                <button class="btn btn-danger btn-xs">Del</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-32">No payments found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Payment Modal -->
+<div id="addPayModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header"><h3>Create Payment</h3><button onclick="closeModal('addPayModal')">✕</button></div>
+    <form method="POST" action="{{ url_for('owner.add_payment') }}">
+      <div class="modal-body grid-2">
+        <div class="form-group">
+          <label class="form-label">Tenant *</label>
+          <select name="tenant_id" class="form-input" required>
+            <option value="">Select tenant…</option>
+            {% for t in tenants %}<option value="{{ t.id }}">{{ t.full_name }} ({{ t.phone }})</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Property *</label>
+          <select name="property_id" class="form-input" required>
+            <option value="">Select property…</option>
+            {% for p in properties %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (₹) *</label>
+          <input type="number" step="1" min="0" name="amount" class="form-input" placeholder="6000" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select name="payment_type" class="form-input">
+            <option value="rent">Rent</option>
+            <option value="deposit">Deposit</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="utility">Utility</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Month (YYYY-MM)</label>
+          <input type="month" name="rent_month" class="form-input"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due Date</label>
+          <input type="date" name="due_date" class="form-input"/>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Description</label>
+          <input name="description" class="form-input" placeholder="e.g. April rent"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('addPayModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Status Modal -->
+<div id="statusModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-header"><h3>Update Status</h3><button onclick="closeModal('statusModal')">✕</button></div>
+    <form method="POST" id="statusForm">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select name="status" id="statusSel" class="form-input">
+            <option value="pending">⏳ Pending</option>
+            <option value="completed">✅ Completed (Paid)</option>
+            <option value="overdue">⚠️ Overdue</option>
+            <option value="failed">✗ Failed</option>
+            <option value="waived">Waived</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('statusModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openStatusModal(pid, cur) {
+  document.getElementById('statusForm').action = `/owner/payments/${pid}/update-status`;
+  document.getElementById('statusSel').value   = cur;
+  openModal('statusModal');
+}
+</script>
+{% endblock %}

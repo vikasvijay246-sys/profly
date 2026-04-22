@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Rooms — PropFlow{% endblock %}
+{% block page_title %}Room Management{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2>Rooms <span class="badge-count">{{ room_data|length }}</span></h2>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addRoomModal')">+ Add Room</button>
+  </div>
+
+  {% if room_data %}
+  <div class="rooms-grid">
+    {% for rd in room_data %}
+    {% set r = rd.room %}
+    <div class="room-card {% if r.get_is_full() %}room-full{% endif %}">
+      <div class="room-card-header">
+        <div class="room-number">Room {{ r.room_number }}</div>
+        <div class="room-occupancy-badge {% if r.get_is_full() %}occ-full{% elif rd.occupancy > 0 %}occ-partial{% else %}occ-empty{% endif %}">
+          {{ rd.occupancy }}/{{ r.max_capacity }}
+        </div>
+      </div>
+
+      {% if r.description %}
+      <div class="room-desc text-muted">{{ r.description }}</div>
+      {% endif %}
+      {% if r.prop %}
+      <div class="room-prop text-muted">🏠 {{ r.prop.name }}</div>
+      {% endif %}
+
+      <!-- Occupancy bar -->
+      <div class="occ-bar-wrap">
+        <div class="occ-bar" style="width:{{ (rd.occupancy / r.max_capacity * 100)|int }}%"></div>
+      </div>
+
+      <!-- Tenant list -->
+      {% if rd.assignments %}
+      <div class="tenant-list">
+        {% for a in rd.assignments %}
+        <div class="tenant-row">
+          <div class="tenant-avatar-sm">{{ a.tenant.full_name[0].upper() if a.tenant else '?' }}</div>
+          <span class="tenant-name-sm">{{ a.tenant.full_name if a.tenant else '?' }}</span>
+          <span class="payment-pill {% if a.payment_status == 'paid' %}pill-paid{% else %}pill-unpaid{% endif %}">
+            {{ 'Paid' if a.payment_status == 'paid' else 'Unpaid' }}
+          </span>
+          <!-- Toggle payment -->
+          <form method="POST" action="{{ url_for('rooms.update_payment', aid=a.id) }}" style="display:inline">
+            <input type="hidden" name="payment_status" value="{{ 'not_paid' if a.payment_status == 'paid' else 'paid' }}"/>
+            <button class="btn btn-ghost btn-xs" title="Toggle payment">⇄</button>
+          </form>
+          <!-- Remove from room -->
+          <form method="POST" action="{{ url_for('rooms.remove_tenant', aid=a.id) }}" style="display:inline"
+                onsubmit="return confirm('Remove from room?')">
+            <button class="btn btn-danger btn-xs">✕</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-muted" style="font-size:12px;padding:8px 0">No tenants assigned</div>
+      {% endif %}
+
+      <div class="room-card-footer">
+        <!-- Assign tenant -->
+        {% if not r.get_is_full() %}
+        <button class="btn btn-primary btn-xs" onclick='openAssignModal({{ r.id }}, {{ r.room_number }})'>+ Assign</button>
+        {% else %}
+        <span class="badge badge-overdue" style="font-size:11px">Full</span>
+        {% endif %}
+        <div class="action-btns">
+          <button class="btn btn-ghost btn-xs" onclick='openEditRoom({{ r.to_dict()|tojson }})'>Edit</button>
+          <form method="POST" action="{{ url_for('rooms.delete_room', rid=r.id) }}" style="display:inline"
+                onsubmit="return confirm('Delete Room {{ r.room_number }}?')">
+            <button class="btn btn-danger btn-xs">Del</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">🚪</div>
+    <p>No rooms yet. Add your first room!</p>
+    <button class="btn btn-primary" onclick="openModal('addRoomModal')">+ Add Room</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Add Room Modal -->
+<div id="addRoomModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><h3>Add Room</h3><button onclick="closeModal('addRoomModal')">✕</button></div>
+    <form method="POST" action="{{ url_for('rooms.add_room') }}">
+      <div class="modal-body grid-2">
+        <div class="form-group">
+          <label class="form-label">Room Number (1–50) *</label>
+          <input type="number" name="room_number" min="1" max="50" class="form-input" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Capacity</label>
+          <input type="number" name="max_capacity" min="1" max="10" value="4" class="form-input"/>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Property</label>
+          <select name="property_id" class="form-input">
+            <option value="">— None —</option>
+            {% for p in properties %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Description</label>
+          <input name="description" class="form-input" placeholder="e.g. Ground Floor Room A"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('addRoomModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Room</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Room Modal -->
+<div id="editRoomModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><h3>Edit Room</h3><button onclick="closeModal('editRoomModal')">✕</button></div>
+    <form method="POST" id="editRoomForm">
+      <div class="modal-body grid-2">
+        <div class="form-group">
+          <label class="form-label">Max Capacity</label>
+          <input type="number" name="max_capacity" id="er_cap" min="1" max="10" class="form-input"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Property</label>
+          <select name="property_id" class="form-input">
+            <option value="">— None —</option>
+            {% for p in properties %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Description</label>
+          <input name="description" id="er_desc" class="form-input"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('editRoomModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Assign Tenant Modal -->
+<div id="assignModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h3>Assign to <span id="assignRoomLabel">Room</span></h3>
+      <button onclick="closeModal('assignModal')">✕</button>
+    </div>
+    <form method="POST" id="assignForm">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Select Tenant *</label>
+          <select name="tenant_id" class="form-input" required>
+            <option value="">Choose tenant…</option>
+            {% for t in tenants %}
+            <option value="{{ t.id }}">{{ t.full_name }} ({{ t.phone }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('assignModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Assign</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openAssignModal(roomId, roomNum) {
+  document.getElementById('assignRoomLabel').textContent = 'Room ' + roomNum;
+  document.getElementById('assignForm').action = '/rooms/' + roomId + '/assign';
+  openModal('assignModal');
+}
+function openEditRoom(r) {
+  document.getElementById('er_cap').value  = r.max_capacity;
+  document.getElementById('er_desc').value = r.description;
+  document.getElementById('editRoomForm').action = '/rooms/' + r.id + '/edit';
+  openModal('editRoomModal');
+}
+</script>
+{% endblock %}

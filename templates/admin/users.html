@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Owners — PropFlow{% endblock %}
+{% block page_title %}Owners{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div class="flex gap-8 align-center">
+      <h2>Owners <span class="badge-count">{{ users|length }}</span></h2>
+      <div class="tab-group">
+        <a href="{{ url_for('admin.users') }}"               class="tab {% if not role_filter %}active{% endif %}">All</a>
+        <a href="{{ url_for('admin.users', role='owner') }}"  class="tab {% if role_filter=='owner'  %}active{% endif %}">Owners</a>
+        <a href="{{ url_for('admin.users', role='admin') }}"  class="tab {% if role_filter=='admin'  %}active{% endif %}">Admins</a>
+        <a href="{{ url_for('admin.users', role='tenant') %}" class="tab {% if role_filter=='tenant' %}active{% endif %}">Tenants</a>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addUserModal')">+ Add Owner</button>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Phone</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><div class="user-cell"><div class="avatar avatar-sm">{{ u.full_name[0].upper() }}</div>{{ u.full_name }}</div></td>
+          <td class="text-muted">{{ u.phone }}</td>
+          <td><span class="role-badge role-{{ u.role }}">{{ u.role }}</span></td>
+          <td><span class="badge badge-{{ 'completed' if u.is_active else 'overdue' }}">{{ 'Active' if u.is_active else 'Inactive' }}</span></td>
+          <td class="text-muted">{{ u.created_at.strftime('%b %d, %Y') if u.created_at else '—' }}</td>
+          <td>
+            <div class="action-btns">
+              <button class="btn btn-ghost btn-xs" onclick='openEditUser({{ u.to_dict()|tojson }})'>Edit</button>
+              {% if u.id != current_user.id %}
+              <form method="POST" action="{{ url_for('admin.delete_user', uid=u.id) }}" style="display:inline" onsubmit="return confirm('Delete {{ u.full_name }}?')">
+                <button class="btn btn-danger btn-xs">Del</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-32">No users found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Owner Modal (admin creates owners only) -->
+<div id="addUserModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header"><h3>Add Owner</h3><button onclick="closeModal('addUserModal')">✕</button></div>
+    <form method="POST" action="{{ url_for('admin.add_user') }}">
+      <div class="modal-body grid-2">
+        <div class="form-group span-2"><label class="form-label">Full Name *</label><input name="full_name" class="form-input" required/></div>
+        <div class="form-group"><label class="form-label">Phone / Username *</label><input name="phone" class="form-input" required/></div>
+        <div class="form-group"><label class="form-label">Password *</label><input type="password" name="password" class="form-input" required/></div>
+        <div class="form-group span-2">
+          <div class="form-hint" style="background:var(--c-blue-bg);color:var(--c-blue);padding:8px 12px;border-radius:6px">
+            ℹ️ Admins can only create Owner accounts. Owners create Tenants.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('addUserModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Owner</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div id="editUserModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header"><h3>Edit User</h3><button onclick="closeModal('editUserModal')">✕</button></div>
+    <form method="POST" id="editUserForm">
+      <div class="modal-body grid-2">
+        <div class="form-group span-2"><label class="form-label">Full Name</label><input name="full_name" id="editFullName" class="form-input" required/></div>
+        <div class="form-group"><label class="form-label">New Password <span class="text-muted">(blank = keep)</span></label><input type="password" name="password" class="form-input"/></div>
+        <div class="form-group"><label class="form-label">Status</label><select name="is_active" id="editActive" class="form-input"><option value="1">Active</option><option value="0">Inactive</option></select></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('editUserModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function openEditUser(u) {
+  document.getElementById('editFullName').value = u.full_name;
+  document.getElementById('editActive').value   = u.is_active ? '1' : '0';
+  document.getElementById('editUserForm').action = `/admin/users/${u.id}/edit`;
+  openModal('editUserModal');
+}
+</script>
+{% endblock %}

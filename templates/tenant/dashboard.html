@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — PropFlow{% endblock %}
+{% block page_title %}My Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--c-blue-bg);color:var(--c-blue)">🏠</div>
+    <div class="stat-body"><div class="stat-value">{{ stats.active_leases }}</div><div class="stat-label">My Rooms</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--c-yellow-bg);color:var(--c-yellow)">⏳</div>
+    <div class="stat-body"><div class="stat-value">{{ stats.pending_payments }}</div><div class="stat-label">Pending</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--c-red-bg);color:var(--c-red)">⚠️</div>
+    <div class="stat-body"><div class="stat-value">{{ stats.overdue_payments }}</div><div class="stat-label">Overdue</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--c-green-bg);color:var(--c-green)">✅</div>
+    <div class="stat-body"><div class="stat-value">{{ stats.paid_payments }}</div><div class="stat-label">Paid</div></div>
+  </div>
+</div>
+
+<!-- Current month rent status — prominent card -->
+{% if current_month_pay %}
+<div class="card" style="border-left:4px solid {% if current_month_pay.status == 'completed' %}var(--c-green){% elif current_month_pay.status == 'overdue' %}var(--c-red){% else %}var(--c-yellow){% endif %};margin-bottom:20px">
+  <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">This Month — {{ current_month }}</div>
+      <div style="font-size:28px;font-weight:700;margin:4px 0">₹{{ "{:,.0f}".format(current_month_pay.amount) }}</div>
+      <div>
+        {% if current_month_pay.status == 'completed' %}
+          <span class="status-pill pill-paid">✅ Paid</span>
+          {% if current_month_pay.paid_at %}<span class="text-muted" style="font-size:12px;margin-left:8px">on {{ current_month_pay.paid_at.strftime('%d-%m-%Y') }}</span>{% endif %}
+        {% elif current_month_pay.status == 'overdue' %}
+          <span class="status-pill pill-unpaid">⚠️ Overdue — Pay Now!</span>
+        {% else %}
+          <span class="status-pill pill-pending">⏳ Due {{ current_month_pay.due_date.strftime('%d-%m-%Y') if current_month_pay.due_date else '' }}</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if current_month_pay.status in ('pending', 'overdue') %}
+    <button class="btn btn-primary" style="padding:12px 24px;font-size:16px"
+            onclick="openPayModal({{ current_month_pay.id }}, '{{ current_month_pay.amount }}')">
+      💳 Pay Rent Now
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="card" style="padding:16px 20px;margin-bottom:20px">
+  <div class="text-muted" style="font-size:13px">⏳ No rent record for {{ current_month }} yet. Your owner will generate it soon.</div>
+</div>
+{% endif %}
+
+<!-- Quick actions -->
+<div class="quick-actions">
+  <a href="{{ url_for('tenant.payments') }}"     class="qa-btn"><span>💳</span>Payments</a>
+  <a href="{{ url_for('tenant.notifications') }}" class="qa-btn">
+    <span>🔔</span>Alerts
+    {% if stats.unread_notifs > 0 %}<span class="unread-dot" style="font-size:10px">{{ stats.unread_notifs }}</span>{% endif %}
+  </a>
+  <a href="{{ url_for('chat.index') }}"           class="qa-btn"><span>💬</span>Message</a>
+  <a href="{{ url_for('tenant.payment_history') }}" class="qa-btn"><span>📋</span>History</a>
+</div>
+
+<!-- Room assignment card -->
+{% if room_assignment %}
+<div class="card room-info-card">
+  <div class="room-info-header">
+    <div class="room-info-icon">🚪</div>
+    <div style="flex:1">
+      <div class="room-info-title">Room {{ room_assignment.room.room_number }}</div>
+      {% if room_assignment.room.description %}
+        <div class="text-muted" style="font-size:13px">{{ room_assignment.room.description }}</div>
+      {% endif %}
+      {% if room_assignment.room.prop %}
+        <div class="text-muted" style="font-size:12px">🏠 {{ room_assignment.room.prop.name }}</div>
+      {% endif %}
+    </div>
+    <span class="status-pill {% if room_assignment.payment_status == 'paid' %}pill-paid{% else %}pill-unpaid{% endif %}">
+      {{ '✅ Paid' if room_assignment.payment_status == 'paid' else '❌ Not Paid' }}
+    </span>
+  </div>
+  <div class="room-info-meta">
+    <span>👥 {{ room_assignment.room.get_occupancy() }}/{{ room_assignment.room.max_capacity }} occupants</span>
+    <span>·</span>
+    <span>📅 Assigned: {{ room_assignment.assigned_at }}</span>
+  </div>
+</div>
+{% else %}
+<div class="card" style="padding:16px 20px;margin-bottom:16px">
+  <div class="text-muted">🚪 No room assigned yet. Contact your owner.</div>
+</div>
+{% endif %}
+
+<!-- My properties / leases -->
+{% if tenancies %}
+<div class="section-title">My Properties</div>
+<div class="prop-grid">
+  {% for t in tenancies %}
+  {% set p = t.property %}{% if p %}
+  <div class="prop-card">
+    <div class="prop-card-bar" style="background:var(--c-blue)"></div>
+    <div class="prop-card-body">
+      <h3 class="prop-name">{{ p.name }}</h3>
+      <div class="prop-addr text-muted">📍 {{ p.address }}, {{ p.city }}</div>
+      <div class="prop-meta">
+        {% if p.bedrooms %}<span>🛏 {{ p.bedrooms }}</span>{% endif %}
+        {% if p.bathrooms %}<span>🚿 {{ p.bathrooms }}</span>{% endif %}
+        <span class="badge badge-{{ 'completed' if t.status=='active' else 'overdue' }}">{{ t.status }}</span>
+        {% if t.room_number %}<span class="month-tag">Room {{ t.room_number }}</span>{% endif %}
+      </div>
+      <div class="prop-footer">
+        <div class="prop-rent">₹{{ "{:,.0f}".format(p.monthly_rent) }}<span class="text-muted">/mo</span></div>
+        {% if t.lease_end %}<span class="text-muted" style="font-size:12px">Until {{ t.lease_end.strftime('%d-%m-%Y') }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+<!-- Recent payments -->
+{% if recent_payments %}
+<div class="card">
+  <div class="card-header">
+    <h2>Recent Payments</h2>
+    <a href="{{ url_for('tenant.payment_history') }}" class="btn btn-ghost btn-sm">Full history →</a>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Month</th><th>Amount</th><th>Status</th><th>Due</th><th>Action</th></tr></thead>
+      <tbody>
+        {% for pay in recent_payments %}
+        <tr>
+          <td><span class="month-tag">{{ pay.rent_month or '—' }}</span></td>
+          <td><strong>₹{{ "{:,.0f}".format(pay.amount) }}</strong></td>
+          <td>
+            {% if pay.status == 'completed' %}<span class="status-pill pill-paid" style="font-size:12px;padding:3px 9px">✅ Paid</span>
+            {% elif pay.status == 'overdue'  %}<span class="status-pill pill-unpaid" style="font-size:12px;padding:3px 9px">⚠️ Overdue</span>
+            {% else %}<span class="status-pill pill-pending" style="font-size:12px;padding:3px 9px">⏳ Pending</span>{% endif %}
+          </td>
+          <td class="text-muted">{{ pay.due_date.strftime('%d-%m-%Y') if pay.due_date else '—' }}</td>
+          <td>
+            {% if pay.status in ('pending', 'overdue') %}
+            <button class="btn btn-primary btn-xs" onclick="openPayModal({{ pay.id }}, '{{ pay.amount }}')">Pay</button>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Pay Modal -->
+<div id="payModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header"><h3>💳 Pay Rent</h3><button onclick="closeModal('payModal')">✕</button></div>
+    <form method="POST" id="payForm">
+      <div class="modal-body">
+        <div class="pay-amount-display" id="payAmountDisplay"></div>
+        <div class="form-group">
+          <label class="form-label">Payment Method</label>
+          <select name="payment_method" class="form-input">
+            <option value="online">Online / UPI</option>
+            <option value="bank_transfer">Bank Transfer</option>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('payModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="min-width:120px">✅ Confirm Pay</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openPayModal(pid, amount) {
+  document.getElementById('payForm').action = `/tenant/payments/${pid}/pay`;
+  document.getElementById('payAmountDisplay').textContent = `₹${parseFloat(amount).toLocaleString('en-IN')}`;
+  openModal('payModal');
+}
+</script>
+{% endblock %}

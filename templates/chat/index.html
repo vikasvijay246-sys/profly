@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+{% block title %}Chat — PropFlow{% endblock %}
+{% block page_title %}Messages{% endblock %}
+
+{% block content %}
+<div class="chat-layout">
+
+  <!-- Conversation sidebar -->
+  <div class="chat-sidebar {% if selected_user %}chat-sidebar-hidden-mobile{% endif %}">
+    <div class="chat-sidebar-head">
+      <span class="font-semibold">💬 Conversations</span>
+      <input type="text" id="convSearch" placeholder="Search…" class="form-input"
+             style="padding:6px 10px;font-size:13px;margin-top:8px"
+             oninput="filterConvs(this.value)"/>
+    </div>
+    <div class="conv-list" id="convList">
+      {% for c in conversations %}
+      <a href="{{ url_for('chat.index', **{'with': c.user.id}) }}"
+         class="conv-item {% if selected_user and selected_user.id == c.user.id %}conv-active{% endif %}"
+         data-name="{{ c.user.full_name|lower }}">
+        <div class="conv-avatar" style="background:{{ loop.cycle('var(--c-blue-bg)','var(--c-green-bg)','var(--c-yellow-bg)','var(--c-purple-bg)') }}">
+          {{ c.user.full_name[0].upper() }}
+        </div>
+        <div class="conv-info">
+          <div class="conv-name">
+            {{ c.user.full_name }}
+            {% if c.unread %}<span class="unread-dot">{{ c.unread }}</span>{% endif %}
+          </div>
+          <div class="conv-last text-muted">
+            {% if c.last %}
+              {% if c.last.file_type == 'image' %}📷 Photo
+              {% elif c.last.file_type == 'video' %}🎥 Video
+              {% elif c.last.file_type == 'audio' %}🎤 Voice note
+              {% elif c.last.file_type == 'file' %}📎 {{ c.last.file_name or 'File' }}
+              {% else %}{{ (c.last.content or '')[:40] }}{% endif %}
+            {% else %}<em>Start chatting</em>{% endif %}
+          </div>
+        </div>
+        <div class="conv-meta">
+          <span class="role-badge role-{{ c.user.role }}" style="font-size:10px">{{ c.user.role }}</span>
+          {% if c.last %}
+          <div class="conv-time text-muted">{{ c.last.created_at.strftime('%H:%M') }}</div>
+          {% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div class="conv-empty text-muted">No conversations yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Message pane -->
+  <div class="chat-main {% if not selected_user %}chat-main-hidden-mobile{% endif %}">
+    {% if selected_user %}
+    <!-- Header -->
+    <div class="chat-head">
+      <a href="{{ url_for('chat.index') }}" class="chat-back-btn">←</a>
+      <div class="conv-avatar" style="background:var(--c-blue-bg);color:var(--c-blue)">
+        {{ selected_user.full_name[0].upper() }}
+      </div>
+      <div class="flex-1">
+        <div class="font-semibold">{{ selected_user.full_name }}</div>
+        <div id="statusLine" class="text-muted" style="font-size:12px">
+          <span class="role-badge role-{{ selected_user.role }}">{{ selected_user.role }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="msg-area" id="msgArea">
+      {% if messages|length >= page_size %}
+      <div class="text-center" style="padding:8px">
+        <button class="btn btn-ghost btn-xs" id="loadMoreBtn"
+                onclick="loadOlderMessages()">Load older messages</button>
+      </div>
+      {% endif %}
+
+      {% for m in messages %}
+      {% if not m.is_deleted %}
+      <div class="msg-row {% if m.sender_id == current_user.id %}msg-mine{% else %}msg-theirs{% endif %}"
+           data-mid="{{ m.id }}">
+        <div class="msg-bubble">
+          {% if m.file_type == 'image' %}
+            <a href="{{ m.file_url }}" target="_blank">
+              <img src="{{ m.file_url }}" class="msg-img" loading="lazy"/>
+            </a>
+          {% elif m.file_type == 'video' %}
+            <video src="{{ m.file_url }}" controls class="msg-video"></video>
+          {% elif m.file_type == 'audio' %}
+            <audio src="{{ m.file_url }}" controls class="msg-audio"></audio>
+            {% if m.file_name %}<div style="font-size:11px;opacity:.7;margin-top:4px">🎤 {{ m.file_name }}</div>{% endif %}
+          {% elif m.file_url %}
+            <a href="{{ m.file_url }}" target="_blank" class="msg-file-link" download="{{ m.file_name }}">
+              📎 {{ m.file_name or 'Download file' }}
+              {% if m.file_size %}<span style="font-size:10px;opacity:.7;margin-left:4px">({{ (m.file_size / 1024)|int }} KB)</span>{% endif %}
+            </a>
+          {% endif %}
+          {% if m.content %}
+          <div class="msg-text">{{ m.content }}</div>
+          {% endif %}
+          <div class="msg-meta">
+            {{ m.created_at.strftime('%I:%M %p') if m.created_at else '' }}
+            {% if m.sender_id == current_user.id %}
+            <span class="msg-ticks {% if m.is_read %}ticks-read{% else %}ticks-sent{% endif %}">
+              {{ '✓✓' if m.is_read else '✓' }}
+            </span>
+            · <button class="msg-del-btn" onclick="deleteMsg({{ m.id }}, this)" title="Delete">🗑</button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+      <div id="msgEnd"></div>
+    </div>
+
+    <!-- Typing indicator -->
+    <div id="typingBar" class="chat-typing hidden">
+      <span id="typingText"></span>
+    </div>
+
+    <!-- Input -->
+    <div class="chat-input-wrap">
+      <form id="msgForm" class="chat-form" enctype="multipart/form-data">
+        <input type="hidden" name="receiver_id" value="{{ selected_user.id }}"/>
+        <div id="filePreview" class="file-preview hidden"></div>
+        <div class="chat-input-row">
+          <label class="file-btn" title="Attach: image, video, audio, document">
+            📎
+            <input type="file" id="fileInput" name="file" style="display:none"
+                   onchange="previewFile(this)"
+                   accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"/>
+          </label>
+          <input type="text" name="content" id="msgInput"
+                 class="chat-input" placeholder="Type a message…" autocomplete="off"/>
+          <button type="submit" class="chat-send-btn" id="sendBtn">Send</button>
+        </div>
+      </form>
+    </div>
+
+    {% else %}
+    <div class="chat-empty">
+      <div class="empty-icon">💬</div>
+      <p>Select a conversation</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RECEIVER_ID = {{ selected_user.id if selected_user else 'null' }};
+const CURRENT_ID  = {{ current_user.id }};
+const PAGE_SIZE   = {{ page_size }};
+let   lastTs      = 0;
+let   oldestId    = null;
+let   isOnline    = false;
+
+// ── Scroll ──────────────────────────────────────────────────
+function scrollBottom(smooth) {
+  const el = document.getElementById('msgEnd');
+  if (el) el.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' });
+}
+scrollBottom(false);
+
+// Record oldest message id for pagination
+(function() {
+  const rows = document.querySelectorAll('.msg-row[data-mid]');
+  if (rows.length) {
+    oldestId = parseInt(rows[0].dataset.mid);
+    lastTs   = 0;  // will be updated by poll/socket
+  }
+})();
+
+// ── Render one message ───────────────────────────────────────
+function renderMsg(m) {
+  if (document.querySelector(`[data-mid="${m.id}"]`)) return null;
+  const isMine = m.sender_id === CURRENT_ID;
+  const wrap   = document.createElement('div');
+  wrap.className = `msg-row ${isMine ? 'msg-mine' : 'msg-theirs'}`;
+  wrap.dataset.mid = m.id;
+
+  let media = '';
+  if (m.file_type === 'image')
+    media = `<a href="${m.file_url}" target="_blank"><img src="${m.file_url}" class="msg-img" loading="lazy"/></a>`;
+  else if (m.file_type === 'video')
+    media = `<video src="${m.file_url}" controls class="msg-video"></video>`;
+  else if (m.file_type === 'audio')
+    media = `<audio src="${m.file_url}" controls class="msg-audio"></audio>`;
+  else if (m.file_url)
+    media = `<a href="${m.file_url}" target="_blank" class="msg-file-link" download="${m.file_name||''}">📎 ${esc(m.file_name||'Download')}</a>`;
+
+  const ticks = isMine
+    ? `<span class="msg-ticks ${m.is_read ? 'ticks-read':'ticks-sent'}">${m.is_read?'✓✓':'✓'}</span>`
+    : '';
+  const del = isMine
+    ? `· <button class="msg-del-btn" onclick="deleteMsg(${m.id},this)">🗑</button>` : '';
+
+  // Parse time from created_at (DD-MM-YYYY HH:MM AM/PM format)
+  const timeStr = m.created_at ? m.created_at.slice(-8) : '';
+
+  wrap.innerHTML = `<div class="msg-bubble">
+    ${media}
+    ${m.content ? `<div class="msg-text">${esc(m.content)}</div>` : ''}
+    <div class="msg-meta">${timeStr} ${ticks} ${del}</div>
+  </div>`;
+  return wrap;
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── SocketIO events ──────────────────────────────────────────
+if (RECEIVER_ID) {
+  socket.emit('join_chat', { other_id: RECEIVER_ID });
+
+  socket.on('new_message', (m) => {
+    const area = document.getElementById('msgArea');
+    const end  = document.getElementById('msgEnd');
+    if (!area) return;
+    const node = renderMsg(m);
+    if (node) {
+      if (end) area.insertBefore(node, end); else area.appendChild(node);
+      lastTs = Math.max(lastTs, m.created_ts || 0);
+      scrollBottom(true);
+      // Auto-mark as read if this window is visible
+      if (document.visibilityState === 'visible') {
+        socket.emit('mark_read', { room_id: m.room_id });
+      }
+    }
+  });
+
+  socket.on('message_deleted', (d) => {
+    const el = document.querySelector(`[data-mid="${d.id}"]`);
+    if (el) {
+      el.querySelector('.msg-bubble').innerHTML =
+        '<div class="msg-text" style="opacity:.5;font-style:italic">Message deleted</div>';
+    }
+  });
+
+  socket.on('message_edited', (m) => {
+    const el = document.querySelector(`[data-mid="${m.id}"] .msg-text`);
+    if (el) el.textContent = m.content;
+  });
+
+  socket.on('user_online', (d) => {
+    if (d.user_id === RECEIVER_ID) {
+      isOnline = true;
+      const sl = document.getElementById('statusLine');
+      if (sl) sl.innerHTML = '<span class="online-badge">Online</span>';
+    }
+  });
+
+  socket.on('read_receipt', (d) => {
+    // Update double-tick to blue for all sent messages
+    document.querySelectorAll('.msg-mine .msg-ticks').forEach(el => {
+      el.className = 'msg-ticks ticks-read';
+      el.textContent = '✓✓';
+    });
+  });
+
+  socket.on('typing', (d) => {
+    if (d.user_id !== RECEIVER_ID) return;
+    const bar  = document.getElementById('typingBar');
+    const txt  = document.getElementById('typingText');
+    if (!bar || !txt) return;
+    txt.textContent = `${d.name} is typing…`;
+    bar.classList.remove('hidden');
+    clearTimeout(window._typingTimer);
+    window._typingTimer = setTimeout(() => bar.classList.add('hidden'), 3000);
+  });
+}
+
+// ── Send ─────────────────────────────────────────────────────
+document.getElementById('msgForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn   = document.getElementById('sendBtn');
+  const input = document.getElementById('msgInput');
+  const file  = document.getElementById('fileInput');
+  if (!input.value.trim() && !file.files.length) return;
+  btn.disabled = true; btn.textContent = '…';
+  const fd = new FormData(e.target);
+  try {
+    const res  = await fetch('/chat/send', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error || 'Failed'); return; }
+    input.value = '';
+    if (file) file.value = '';
+    const prev = document.getElementById('filePreview');
+    if (prev) { prev.classList.add('hidden'); prev.innerHTML = ''; }
+    // SocketIO echo will render the message
+  } catch(ex) { alert('Network error'); }
+  finally { btn.disabled = false; btn.textContent = 'Send'; input.focus(); }
+});
+
+// ── Typing emit ───────────────────────────────────────────────
+let _te = false;
+document.getElementById('msgInput')?.addEventListener('input', () => {
+  if (!_te && RECEIVER_ID) {
+    _te = true;
+    socket.emit('typing', { other_id: RECEIVER_ID });
+    setTimeout(() => { _te = false; }, 2000);
+  }
+});
+
+// Enter to send
+document.getElementById('msgInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('msgForm').dispatchEvent(new Event('submit'));
+  }
+});
+
+// ── Delete ───────────────────────────────────────────────────
+async function deleteMsg(mid, btn) {
+  if (!confirm('Delete this message?')) return;
+  const res = await fetch(`/chat/delete/${mid}`, { method:'POST', body: new FormData() });
+  const d   = await res.json();
+  if (!d.ok) alert(d.error || 'Failed');
+}
+
+// ── Load older messages (pagination) ─────────────────────────
+async function loadOlderMessages() {
+  if (!RECEIVER_ID || !oldestId) return;
+  const btn = document.getElementById('loadMoreBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  try {
+    const res  = await fetch(`/chat/messages/${RECEIVER_ID}/older?before=${oldestId}`);
+    const msgs = await res.json();
+    if (!msgs.length) {
+      if (btn) { btn.textContent = 'No more messages'; btn.disabled = true; }
+      return;
+    }
+    const area = document.getElementById('msgArea');
+    const first = area.querySelector('.msg-row');
+    msgs.forEach(m => {
+      const node = renderMsg(m);
+      if (node) {
+        if (first) area.insertBefore(node, first); else area.prepend(node);
+      }
+    });
+    oldestId = msgs[0].id;
+    if (btn) { btn.disabled = false; btn.textContent = 'Load older messages'; }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+  }
+}
+
+// ── File preview ─────────────────────────────────────────────
+function previewFile(input) {
+  const prev = document.getElementById('filePreview');
+  if (!prev) return;
+  prev.innerHTML = '';
+  if (!input.files.length) { prev.classList.add('hidden'); return; }
+  const f = input.files[0];
+  if (f.size > 10 * 1024 * 1024) {
+    alert('File too large (max 10 MB)');
+    input.value = '';
+    return;
+  }
+  const typeIcon = f.type.startsWith('image') ? '🖼' :
+                   f.type.startsWith('video') ? '🎥' :
+                   f.type.startsWith('audio') ? '🎤' : '📎';
+  const name  = document.createElement('span');
+  name.textContent = `${typeIcon} ${f.name} (${(f.size/1024).toFixed(0)} KB)`;
+  const clear = document.createElement('button');
+  clear.type = 'button'; clear.textContent = '✕';
+  clear.onclick = () => { input.value=''; prev.classList.add('hidden'); prev.innerHTML=''; };
+  prev.appendChild(name); prev.appendChild(clear);
+  prev.classList.remove('hidden');
+}
+
+// ── Conversation search ───────────────────────────────────────
+function filterConvs(q) {
+  document.querySelectorAll('.conv-item').forEach(el => {
+    el.style.display = el.dataset.name.includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+
+// ── HTTP poll fallback (when SocketIO unavailable) ────────────
+async function pollFallback() {
+  if (!RECEIVER_ID) return;
+  try {
+    const res  = await fetch(`/chat/poll/${RECEIVER_ID}?since=${lastTs}`);
+    const msgs = await res.json();
+    const area = document.getElementById('msgArea');
+    const end  = document.getElementById('msgEnd');
+    if (!area) return;
+    msgs.forEach(m => {
+      const node = renderMsg(m);
+      if (node) {
+        if (end) area.insertBefore(node, end); else area.appendChild(node);
+        lastTs = Math.max(lastTs, m.created_ts || 0);
+      }
+    });
+    if (msgs.length) scrollBottom(true);
+  } catch(e) {}
+}
+// Only poll if SocketIO is disconnected
+setInterval(() => { if (!socket.connected) pollFallback(); }, 3000);
+</script>
+
+<style>
+/* Typing bar */
+.chat-typing {
+  padding: 6px 16px; font-size: 12px; color: var(--muted);
+  border-top: 1px solid var(--border); background: var(--surface);
+  font-style: italic; transition: all .2s;
+}
+.chat-typing.hidden { display: none; }
+</style>
+{% endblock %}

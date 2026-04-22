@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Payment History — {{ tenant.full_name }}{% endblock %}
+{% block page_title %}Payment History{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div class="flex align-center gap-8">
+      <div class="avatar">{{ tenant.full_name[0].upper() }}</div>
+      <div>
+        <h2>{{ tenant.full_name }}</h2>
+        <div class="text-muted" style="font-size:13px">📞 {{ tenant.phone }}</div>
+      </div>
+    </div>
+    <a href="{{ url_for('owner.tenants') }}" class="btn btn-ghost btn-sm">← Back</a>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Due Date</th>
+          <th>Paid At</th>
+          <th>Transaction</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in history %}
+        <tr>
+          <td><strong>{{ p.rent_month or '—' }}</strong></td>
+          <td>₹{{ "{:,.0f}".format(p.amount) }}</td>
+          <td>
+            <span class="badge {% if p.status == 'completed' %}badge-completed{% elif p.status == 'overdue' %}badge-overdue{% elif p.status == 'pending' %}badge-pending{% else %}badge-failed{% endif %}">
+              {% if p.status == 'completed' %}✅ Paid{% elif p.status == 'overdue' %}⚠️ Overdue{% elif p.status == 'pending' %}⏳ Pending{% else %}{{ p.status }}{% endif %}
+            </span>
+          </td>
+          <td class="text-muted">{{ p.due_date.strftime('%d-%m-%Y') if p.due_date else '—' }}</td>
+          <td class="text-muted">{{ p.paid_at.strftime('%d-%m-%Y') if p.paid_at else '—' }}</td>
+          <td class="text-muted" style="font-size:11px;font-family:monospace">{{ p.transaction_id or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-32">No payment history found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

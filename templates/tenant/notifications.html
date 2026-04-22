@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Notifications — PropFlow{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2>Notifications <span class="badge-count">{{ notifications|length }}</span></h2>
+    {% if notifications %}
+    <form method="POST" action="{{ url_for('tenant.mark_all_read') }}">
+      <button type="submit" class="btn btn-ghost btn-sm">Mark all read</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if notifications %}
+  <div class="notif-list">
+    {% for n in notifications %}
+    <div class="notif-item {% if not n.is_read %}notif-unread{% endif %}">
+      <div class="notif-icon notif-{{ n.notif_type }}">
+        {% if n.notif_type == 'payment_due' %}⏳
+        {% elif n.notif_type == 'payment_received' %}✓
+        {% elif n.notif_type == 'payment_overdue' %}⚠️
+        {% else %}🔔{% endif %}
+      </div>
+      <div class="notif-body">
+        <div class="notif-title">{{ n.title }}</div>
+        <div class="notif-text text-muted">{{ n.body }}</div>
+        <div class="notif-time text-muted">{{ n.created_at.strftime('%b %d, %Y · %H:%M') if n.created_at else '' }}</div>
+      </div>
+      {% if not n.is_read %}
+      <form method="POST" action="{{ url_for('tenant.mark_read', nid=n.id) }}">
+        <button class="btn btn-ghost btn-xs">✓ Read</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="empty-icon">🔔</div><p>You're all caught up!</p></div>
+  {% endif %}
+</div>
+{% endblock %}

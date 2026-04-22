@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Tenants — PropFlow{% endblock %}
+{% block page_title %}Tenants{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2>Tenants <span class="badge-count">{{ tenants|length }}</span></h2>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addTenantModal')">+ Add Tenant</button>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Phone (Login)</th><th>Status</th><th>Property</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for t in tenants %}
+        <tr>
+          <td>
+            <div class="user-cell">
+              <div class="avatar avatar-sm" style="background:#dbeafe;color:#1d4ed8">{{ t.full_name[0].upper() }}</div>
+              {{ t.full_name }}
+            </div>
+          </td>
+          <td class="text-muted font-mono">{{ t.phone }}</td>
+          <td><span class="badge badge-{{ 'completed' if t.is_active else 'overdue' }}">{{ 'Active' if t.is_active else 'Inactive' }}</span></td>
+          <td class="text-muted">
+            {% set tenancy = t.tenancies.first() %}
+            {{ tenancy.property.name if tenancy and tenancy.property else '—' }}
+          </td>
+          <td>
+            <div class="action-btns">
+              <button class="btn btn-ghost btn-xs" onclick='openEditTenant({{ t.to_dict()|tojson }})'>Edit</button>
+              <form method="POST" action="{{ url_for('owner.delete_tenant', tid=t.id) }}" style="display:inline" onsubmit="return confirm('Delete {{ t.full_name }}? This cannot be undone.')">
+                <button class="btn btn-danger btn-xs">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-32">No tenants yet. Add your first tenant below.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Tenant Modal -->
+<div id="addTenantModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header"><h3>Add Tenant</h3><button onclick="closeModal('addTenantModal')">✕</button></div>
+    <form method="POST" action="{{ url_for('owner.add_tenant') }}">
+      <div class="modal-body grid-2">
+        <div class="form-group span-2">
+          <label class="form-label">Full Name *</label>
+          <input name="full_name" class="form-input" placeholder="Alice Johnson" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone / Username *</label>
+          <input name="phone" class="form-input" placeholder="0712345678" required/>
+          <span class="form-hint">Used to log in</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password *</label>
+          <input type="password" name="password" class="form-input" placeholder="Min 6 chars" required/>
+        </div>
+        <div class="form-group span-2"><hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0"/></div>
+        <div class="form-group span-2">
+          <label class="form-label">Assign to Property <span class="text-muted">(optional)</span></label>
+          <select name="property_id" class="form-input">
+            <option value="">— No property —</option>
+            {% for p in properties %}<option value="{{ p.id }}">{{ p.name }} (${{ "%.0f"|format(p.monthly_rent) }}/mo)</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lease Start</label>
+          <input type="date" name="lease_start" class="form-input"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lease End</label>
+          <input type="date" name="lease_end" class="form-input"/>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Security Deposit ($)</label>
+          <input type="number" step="0.01" name="deposit" class="form-input" placeholder="0.00"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('addTenantModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Tenant</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Tenant Modal -->
+<div id="editTenantModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header"><h3>Edit Tenant</h3><button onclick="closeModal('editTenantModal')">✕</button></div>
+    <form method="POST" id="editTenantForm">
+      <div class="modal-body grid-2">
+        <div class="form-group span-2">
+          <label class="form-label">Full Name</label>
+          <input name="full_name" id="et_name" class="form-input" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">New Password <span class="text-muted">(blank = keep)</span></label>
+          <input type="password" name="password" class="form-input" placeholder="New password"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select name="is_active" id="et_active" class="form-input">
+            <option value="1">Active</option>
+            <option value="0">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('editTenantModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditTenant(t) {
+  document.getElementById('et_name').value   = t.full_name||'';
+  document.getElementById('et_active').value = t.is_active ? '1' : '0';
+  document.getElementById('editTenantForm').action = `/owner/tenants/${t.id}/edit`;
+  openModal('editTenantModal');
+}
+</script>
+{% endblock %}

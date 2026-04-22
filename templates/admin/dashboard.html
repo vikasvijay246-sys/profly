@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — PropFlow{% endblock %}
+{% block page_title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-blue-bg);color:var(--c-blue)">👔</div><div class="stat-body"><div class="stat-value">{{ stats.total_owners }}</div><div class="stat-label">Owners</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-green-bg);color:var(--c-green)">🧑</div><div class="stat-body"><div class="stat-value">{{ stats.total_tenants }}</div><div class="stat-label">Tenants</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-purple-bg);color:var(--c-purple)">🚪</div><div class="stat-body"><div class="stat-value">{{ stats.total_rooms }}</div><div class="stat-label">Total Rooms</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-yellow-bg);color:var(--c-yellow)">🏠</div><div class="stat-body"><div class="stat-value">{{ stats.total_properties }}</div><div class="stat-label">Properties</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-green-bg);color:var(--c-green)">💰</div><div class="stat-body"><div class="stat-value">₹{{ "{:,.0f}".format(stats.revenue) }}</div><div class="stat-label">Collected</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-red-bg);color:var(--c-red)">⚠️</div><div class="stat-body"><div class="stat-value">{{ stats.overdue_payments }}</div><div class="stat-label">Overdue</div></div></div>
+</div>
+
+<!-- Quick actions -->
+<div class="quick-actions">
+  <a href="{{ url_for('admin.users') }}"    class="qa-btn"><span>👔</span>Add Owner</a>
+  <a href="{{ url_for('admin.payments') }}" class="qa-btn"><span>💳</span>Payments</a>
+  <a href="{{ url_for('rooms.index') }}"    class="qa-btn"><span>🚪</span>Rooms</a>
+  <a href="{{ url_for('chat.index') }}"     class="qa-btn"><span>💬</span>Message</a>
+  <button onclick="openModal('genRentModal')" class="qa-btn qa-btn-accent"><span>⚡</span>Gen Rent</button>
+</div>
+
+<div class="two-col">
+  <!-- Recent Payments -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Recent Payments</h2>
+      <a href="{{ url_for('admin.payments') }}" class="btn btn-ghost btn-sm">View all</a>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Tenant</th><th>Month</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for p in recent_payments %}
+          <tr>
+            <td>{{ p.tenant.full_name if p.tenant else '—' }}</td>
+            <td><span class="month-tag">{{ p.rent_month or '—' }}</span></td>
+            <td>₹{{ "{:,.0f}".format(p.amount) }}</td>
+            <td>
+              {% if p.status == 'completed' %}<span class="badge badge-completed">✅ Paid</span>
+              {% elif p.status == 'overdue' %}<span class="badge badge-overdue">⚠️ Overdue</span>
+              {% else %}<span class="badge badge-pending">⏳ {{ p.status }}</span>{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted py-32">No payments</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent Users -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Recent Users</h2>
+      <a href="{{ url_for('admin.users') }}" class="btn btn-ghost btn-sm">Manage</a>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Name</th><th>Phone</th><th>Role</th></tr></thead>
+        <tbody>
+          {% for u in recent_users %}
+          <tr>
+            <td><div class="user-cell"><div class="avatar avatar-sm">{{ u.full_name[0].upper() }}</div>{{ u.full_name }}</div></td>
+            <td class="text-muted">{{ u.phone }}</td>
+            <td><span class="role-badge role-{{ u.role }}">{{ u.role }}</span></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="text-center text-muted">No users</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Generate Rent Modal -->
+<div id="genRentModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><h3>⚡ Generate Monthly Rent</h3><button onclick="closeModal('genRentModal')">✕</button></div>
+    <form method="POST" action="{{ url_for('admin.generate_rent') }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Month</label>
+          <input type="month" name="month" class="form-input" required/>
+          <div class="form-hint">Generates pending rent records for ALL active tenants across all properties. Skips existing records.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('genRentModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">⚡ Generate</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

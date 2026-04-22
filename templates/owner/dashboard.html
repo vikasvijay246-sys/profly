@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Owner Dashboard — PropFlow{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-blue-bg);color:var(--c-blue)">🏠</div><div class="stat-body"><div class="stat-value">{{ stats.total_properties }}</div><div class="stat-label">Properties</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-green-bg);color:var(--c-green)">👤</div><div class="stat-body"><div class="stat-value">{{ stats.total_tenants }}</div><div class="stat-label">Tenants</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-purple-bg);color:var(--c-purple)">🚪</div><div class="stat-body"><div class="stat-value">{{ stats.total_rooms }}</div><div class="stat-label">Rooms</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-yellow-bg);color:var(--c-yellow)">⏳</div><div class="stat-body"><div class="stat-value">{{ stats.pending_payments }}</div><div class="stat-label">Pending</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-red-bg);color:var(--c-red)">⚠️</div><div class="stat-body"><div class="stat-value">{{ stats.overdue_payments }}</div><div class="stat-label">Overdue</div></div></div>
+  <div class="stat-card"><div class="stat-icon" style="background:var(--c-green-bg);color:var(--c-green)">💰</div><div class="stat-body"><div class="stat-value">₹{{ "{:,.0f}".format(stats.revenue) }}</div><div class="stat-label">Collected</div></div></div>
+</div>
+
+<!-- Quick actions -->
+<div class="quick-actions">
+  <a href="{{ url_for('owner.tenants') }}"  class="qa-btn"><span>👤</span>Add Tenant</a>
+  <a href="{{ url_for('owner.payments') }}" class="qa-btn"><span>💳</span>Payments</a>
+  <a href="{{ url_for('rooms.index') }}"    class="qa-btn"><span>🚪</span>Rooms</a>
+  <a href="{{ url_for('chat.index') }}"     class="qa-btn"><span>💬</span>Message</a>
+  <button onclick="openModal('genRentModal')" class="qa-btn qa-btn-accent"><span>⚡</span>Gen Rent</button>
+</div>
+
+<!-- Monthly payment summary: Who paid / who didn't -->
+<div class="card">
+  <div class="card-header">
+    <h2>💸 Rent Status — {{ target_month }}</h2>
+    <div class="flex gap-8 align-center">
+      <form method="GET">
+        <input type="month" name="month" value="{{ target_month }}"
+               class="form-input" style="padding:5px 10px;width:160px"
+               onchange="this.form.submit()"/>
+      </form>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Tenant</th><th>Phone</th><th>Property</th><th>Room</th><th>Amount</th><th>Status</th><th>Paid At</th><th>Action</th></tr></thead>
+      <tbody>
+        {% for row in pay_summary %}
+        <tr>
+          <td>
+            <div class="user-cell">
+              <div class="avatar avatar-sm">{{ row.tenant_name[0].upper() }}</div>
+              {{ row.tenant_name }}
+            </div>
+          </td>
+          <td class="text-muted">{{ row.tenant_phone }}</td>
+          <td class="text-muted">{{ row.property_name }}</td>
+          <td>{{ row.room_number }}</td>
+          <td><strong>₹{{ "{:,.0f}".format(row.amount) }}</strong></td>
+          <td>
+            {% if row.is_paid %}
+              <span class="badge badge-completed">✅ Paid</span>
+            {% elif row.status == 'overdue' %}
+              <span class="badge badge-overdue">⚠️ Overdue</span>
+            {% elif row.status == 'pending' %}
+              <span class="badge badge-pending">⏳ Pending</span>
+            {% else %}
+              <span class="badge badge-failed">No Record</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ row.paid_at or '—' }}</td>
+          <td>
+            {% if row.payment_id and not row.is_paid %}
+            <form method="POST" action="{{ url_for('owner.update_payment', pid=row.payment_id) }}" style="display:inline">
+              <input type="hidden" name="status" value="completed"/>
+              <button class="btn btn-primary btn-xs">Mark Paid</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-32">
+          No active tenants found for {{ target_month }}.
+          <button onclick="openModal('genRentModal')" class="btn btn-primary btn-sm" style="margin-left:12px">⚡ Generate Rent</button>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Room occupancy overview -->
+{% if room_data %}
+<div class="card">
+  <div class="card-header">
+    <h2>🚪 Room Overview</h2>
+    <a href="{{ url_for('rooms.index') }}" class="btn btn-ghost btn-sm">Manage →</a>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Room</th><th>Property</th><th>Occupancy</th><th>Paid</th><th>Unpaid</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for rd in room_data %}
+        {% set r = rd.room %}
+        <tr>
+          <td><strong>Room {{ r.room_number }}</strong>{% if r.floor %}<span class="text-muted" style="font-size:11px"> · {{ r.floor }}</span>{% endif %}</td>
+          <td class="text-muted">{{ r.prop.name if r.prop else '—' }}</td>
+          <td>
+            <div class="inline-occ-bar">
+              <span>{{ rd.occupancy }}/{{ r.max_capacity }}</span>
+              <div class="mini-bar"><div class="mini-bar-fill" style="width:{{ ((rd.occupancy / r.max_capacity) * 100)|int if r.max_capacity else 0 }}%"></div></div>
+            </div>
+          </td>
+          <td><span class="badge badge-completed">{{ rd.paid_count }}</span></td>
+          <td><span class="badge badge-{% if rd.occupancy - rd.paid_count > 0 %}overdue{% else %}completed{% endif %}">{{ rd.occupancy - rd.paid_count }}</span></td>
+          <td>
+            {% if r.get_is_full() %}<span class="badge badge-pending">Full</span>
+            {% elif rd.occupancy > 0 %}<span class="badge badge-completed">Active</span>
+            {% else %}<span class="badge badge-failed">Empty</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Recent Payments -->
+<div class="card">
+  <div class="card-header"><h2>Recent Payments</h2><a href="{{ url_for('owner.payments') }}" class="btn btn-ghost btn-sm">View all</a></div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Tenant</th><th>Amount</th><th>Month</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>
+        {% for p in recent_payments %}
+        <tr>
+          <td>{{ p.tenant.full_name if p.tenant else '—' }}</td>
+          <td><strong>₹{{ "{:,.0f}".format(p.amount) }}</strong></td>
+          <td class="text-muted">{{ p.rent_month or '—' }}</td>
+          <td><span class="badge {% if p.status == 'completed' %}badge-completed{% elif p.status == 'overdue' %}badge-overdue{% else %}badge-pending{% endif %}">{% if p.status == 'completed' %}✅ Paid{% elif p.status == 'overdue' %}⚠️ Overdue{% else %}⏳ Pending{% endif %}</span></td>
+          <td class="text-muted">{{ p.created_at.strftime('%d-%m-%Y') if p.created_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-32">No payments</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Generate Rent Modal -->
+<div id="genRentModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><h3>⚡ Generate Monthly Rent</h3><button onclick="closeModal('genRentModal')">✕</button></div>
+    <form method="POST" action="{{ url_for('owner.generate_rent') }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Month</label>
+          <input type="month" name="month" value="{{ target_month }}" class="form-input" required/>
+          <div class="form-hint">Creates pending rent records for all active tenants. Already existing records are skipped.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('genRentModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Generate</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

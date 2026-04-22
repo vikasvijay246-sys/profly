@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Properties — PropFlow{% endblock %}
+{% block page_title %}All Properties{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2>Properties <span class="badge-count">{{ properties|length }}</span></h2>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Location</th><th>Type</th><th>Rent/mo</th><th>Status</th><th>Owner</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for p in properties %}
+        <tr>
+          <td><strong>{{ p.name }}</strong>{% if p.unit_number %} <span class="text-muted">#{{ p.unit_number }}</span>{% endif %}</td>
+          <td class="text-muted">{{ p.city }}{% if p.state %}, {{ p.state }}{% endif %}</td>
+          <td>{{ p.property_type }}</td>
+          <td><strong>${{ "%.0f"|format(p.monthly_rent) }}</strong></td>
+          <td><span class="badge badge-{{ 'completed' if p.status=='available' else 'pending' if p.status=='occupied' else 'overdue' }}">{{ p.status }}</span></td>
+          <td>{{ p.owner.full_name if p.owner else '—' }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('admin.delete_property', pid=p.id) }}" onsubmit="return confirm('Remove property?')">
+              <button class="btn btn-danger btn-xs">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-32">No properties yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}My Payments — PropFlow{% endblock %}
+{% block page_title %}My Payments{% endblock %}
+
+{% block content %}
+<!-- Filter bar -->
+<div class="card" style="padding:14px 20px;margin-bottom:16px">
+  <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <select name="status" class="form-input" style="width:160px" onchange="this.form.submit()">
+      <option value="">All Statuses</option>
+      <option value="pending"   {% if status_filter=='pending'   %}selected{% endif %}>⏳ Pending</option>
+      <option value="overdue"   {% if status_filter=='overdue'   %}selected{% endif %}>⚠️ Overdue</option>
+      <option value="completed" {% if status_filter=='completed' %}selected{% endif %}>✅ Paid</option>
+    </select>
+    <select name="month" class="form-input" style="width:160px" onchange="this.form.submit()">
+      <option value="">All Months</option>
+      {% for m in available_months %}
+      <option value="{{ m }}" {% if month_filter==m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+    {% if status_filter or month_filter %}
+    <a href="{{ url_for('tenant.payments') }}" class="btn btn-ghost btn-sm">✕ Clear</a>
+    {% endif %}
+    <a href="{{ url_for('tenant.payment_history') }}" class="btn btn-ghost btn-sm" style="margin-left:auto">📋 Full History</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Payments <span class="badge-count">{{ payments|length }}</span></h2>
+  </div>
+  {% if payments %}
+  <!-- Mobile-friendly card list -->
+  <div class="payment-cards">
+    {% for p in payments %}
+    <div class="payment-card {% if p.status == 'overdue' %}payment-card-overdue{% elif p.status == 'completed' %}payment-card-paid{% endif %}">
+      <div class="payment-card-left">
+        <div class="payment-month-big">{{ p.rent_month or '—' }}</div>
+        <div class="text-muted" style="font-size:12px">{{ p.payment_type | capitalize }}</div>
+        {% if p.due_date %}
+        <div class="text-muted" style="font-size:11px">Due: {{ p.due_date.strftime('%d-%m-%Y') }}</div>
+        {% endif %}
+      </div>
+      <div class="payment-card-right">
+        <div class="payment-amount">₹{{ "{:,.0f}".format(p.amount) }}</div>
+        <div style="margin:6px 0">
+          {% if p.status == 'completed' %}
+            <span class="status-pill pill-paid">✅ Paid</span>
+          {% elif p.status == 'overdue' %}
+            <span class="status-pill pill-unpaid">⚠️ Overdue</span>
+          {% else %}
+            <span class="status-pill pill-pending">⏳ Pending</span>
+          {% endif %}
+        </div>
+        {% if p.status in ('pending', 'overdue') %}
+        <button class="btn btn-primary btn-sm" onclick="openPayModal({{ p.id }}, '{{ p.amount }}')">
+          💳 Pay Now
+        </button>
+        {% elif p.paid_at %}
+        <div class="text-muted" style="font-size:11px">Paid: {{ p.paid_at.strftime('%d-%m-%Y') }}</div>
+        {% if p.transaction_id %}
+        <div style="font-size:10px;font-family:monospace;color:var(--muted)">{{ p.transaction_id }}</div>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="empty-icon">💳</div><p>No payments found.</p></div>
+  {% endif %}
+</div>
+
+<!-- Pay Modal -->
+<div id="payModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header"><h3>💳 Pay Rent</h3><button onclick="closeModal('payModal')">✕</button></div>
+    <form method="POST" id="payForm">
+      <div class="modal-body">
+        <div class="pay-amount-display" id="payAmountDisplay"></div>
+        <div class="form-group">
+          <label class="form-label">Payment Method</label>
+          <select name="payment_method" class="form-input">
+            <option value="online">Online / UPI</option>
+            <option value="bank_transfer">Bank Transfer</option>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('payModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="min-width:120px">✅ Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openPayModal(pid, amount) {
+  document.getElementById('payForm').action = `/tenant/payments/${pid}/pay`;
+  document.getElementById('payAmountDisplay').textContent = `₹${parseFloat(amount).toLocaleString('en-IN')}`;
+  openModal('payModal');
+}
+</script>
+
+<style>
+.payment-cards { padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+.payment-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-radius: var(--radius-lg);
+  background: var(--surface2); border: 1.5px solid var(--border);
+  gap: 12px; flex-wrap: wrap;
+}
+.payment-card-overdue { border-color: var(--c-red);    background: var(--c-red-bg);    }
+.payment-card-paid    { border-color: var(--c-green);  background: var(--c-green-bg);  }
+.payment-card-left  { flex: 1; min-width: 0; }
+.payment-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+.payment-month-big  { font-size: 15px; font-weight: 700; font-family: monospace; }
+.payment-amount     { font-size: 20px; font-weight: 700; }
+@media(max-width:480px) {
+  .payment-card { flex-direction: column; align-items: flex-start; }
+  .payment-card-right { align-items: flex-start; text-align: left; }
+}
+</style>
+{% endblock %}

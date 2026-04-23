@@ -101,7 +101,7 @@
           <td>
             <div class="inline-occ-bar">
               <span>{{ rd.occupancy }}/{{ r.max_capacity }}</span>
-              <div class="mini-bar"><div class="mini-bar-fill" style="width:{{ ((rd.occupancy / r.max_capacity) * 100)|int if r.max_capacity else 0 }}%"></div></div>
+              <div class="mini-bar"><div class="mini-bar-fill" style="width: {{ ((rd.occupancy / r.max_capacity) * 100)|int if r.max_capacity else 0 }}%"></div></div>
             </div>
           </td>
           <td><span class="badge badge-completed">{{ rd.paid_count }}</span></td>

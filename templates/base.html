@@ -42,7 +42,7 @@
     {% elif current_user.role == 'tenant' %}
       <a href="{{ url_for('tenant.dashboard') }}"      class="nav-item {% if request.endpoint == 'tenant.dashboard'      %}active{% endif %}"><span class="nav-icon">⊞</span>Dashboard</a>
       <a href="{{ url_for('tenant.payments') }}"       class="nav-item {% if 'tenant.payment' in request.endpoint        %}active{% endif %}"><span class="nav-icon">💳</span>Payments</a>
-      <a href="{{ url_for('tenant.notifications') %}"  class="nav-item {% if request.endpoint == 'tenant.notifications'  %}active{% endif %}">
+      <a href="{{ url_for('tenant.notifications') }}"  class="nav-item {% if request.endpoint == 'tenant.notifications'  %}active{% endif %}">
         <span class="nav-icon">🔔</span>Alerts<span class="nav-badge" id="notifBadge" style="display:none"></span>
       </a>
       <a href="{{ url_for('chat.index') }}"            class="nav-item {% if 'chat' in request.endpoint                  %}active{% endif %}">

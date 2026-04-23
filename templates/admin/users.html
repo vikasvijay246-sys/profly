@@ -11,7 +11,7 @@
         <a href="{{ url_for('admin.users') }}"               class="tab {% if not role_filter %}active{% endif %}">All</a>
         <a href="{{ url_for('admin.users', role='owner') }}"  class="tab {% if role_filter=='owner'  %}active{% endif %}">Owners</a>
         <a href="{{ url_for('admin.users', role='admin') }}"  class="tab {% if role_filter=='admin'  %}active{% endif %}">Admins</a>
-        <a href="{{ url_for('admin.users', role='tenant') %}" class="tab {% if role_filter=='tenant' %}active{% endif %}">Tenants</a>
+        <a href="{{ url_for('admin.users', role='tenant') }}" class="tab {% if role_filter=='tenant' %}active{% endif %}">Tenants</a>
       </div>
     </div>
     <button class="btn btn-primary btn-sm" onclick="openModal('addUserModal')">+ Add Owner</button>

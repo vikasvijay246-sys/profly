@@ -22,6 +22,13 @@ def to_ist(dt):
     ist = dt + timedelta(hours=5, minutes=30)
     return ist.strftime("%d-%m-%Y %I:%M %p")
 
+def to_ist_time_only(dt):
+    """Convert UTC datetime → IST time string (HH:MM AM/PM)."""
+    if not dt:
+        return None
+    ist = dt + timedelta(hours=5, minutes=30)
+    return ist.strftime("%I:%M %p")
+
 def current_rent_month():
     """Return current month label: e.g. '2025-06'."""
     return datetime.now(timezone.utc).strftime("%Y-%m")
@@ -389,8 +396,9 @@ class Message(db.Model):
             "file_size":   self.file_size,
             "is_read":     self.is_read,
             "is_deleted":  self.is_deleted,
-            "created_at":  to_ist(self.created_at),
+            "created_at":  (self.created_at.isoformat() + 'Z') if self.created_at else None,
             "created_ts":  int(self.created_at.timestamp()) if self.created_at else 0,
+            "created_at_ist": to_ist_time_only(self.created_at),
         }
 
     __table_args__ = (

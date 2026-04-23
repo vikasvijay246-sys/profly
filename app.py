@@ -4,9 +4,10 @@ Run: python app.py
 """
 import os, uuid, logging
 from datetime import datetime, timedelta, timezone
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template, request
 from flask_login import LoginManager
-from flask_socketio import SocketIO, join_room
+from flask_socketio import SocketIO, join_room,test_client, emit, leave_room
+from werkzeug.utils import secure_filename
 
 from config import Config
 from models import db, User
@@ -71,25 +72,33 @@ def create_app(config_class=Config):
 
     @app.errorhandler(403)
     def forbidden(e):
-        return jsonify({"ok": False, "code": "FORBIDDEN",
-                        "error": "Access denied"}), 403
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "code": "FORBIDDEN",
+                            "error": "Access denied"}), 403
+        return render_template("errors/403.html"), 403
 
     @app.errorhandler(404)
     def not_found(e):
-        return jsonify({"ok": False, "code": "NOT_FOUND",
-                        "error": "Resource not found"}), 404
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "code": "NOT_FOUND",
+                            "error": "Resource not found"}), 404
+        return render_template("errors/404.html"), 404
 
     @app.errorhandler(413)
     def too_large(e):
-        return jsonify({"ok": False, "code": "FILE_TOO_LARGE",
-                        "error": "File too large (max 10 MB)"}), 413
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "code": "FILE_TOO_LARGE",
+                            "error": "File too large (max 10 MB)"}), 413
+        return render_template("errors/413.html"), 413
 
     @app.errorhandler(500)
     def internal_error(e):
         db.session.rollback()   # always rollback on 500
         log.exception("Unhandled 500 error")
-        return jsonify({"ok": False, "code": "INTERNAL_ERROR",
-                        "error": "An internal error occurred."}), 500
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "code": "INTERNAL_ERROR",
+                            "error": "An internal error occurred."}), 500
+        return render_template("errors/500.html"), 500
 
     @app.errorhandler(Exception)
     def handle_unhandled(exc):

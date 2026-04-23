@@ -75,5 +75,11 @@ document.addEventListener('DOMContentLoaded', function() {
 if (typeof socket !== 'undefined') {
   socket.on('connect', function() {
     socket.emit('join_user_room');
+    const reciverId= document.getElementById('receiver_id') ?.value;
+    if(reciverId){
+      socket.emit('join_user_room',{receiver_id:reciverId});
+    }     
   });
 }
+socket.on("new_message", function(msg) {console.log("New message received:", msg);appendMessage(msg);});
+

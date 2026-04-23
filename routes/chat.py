@@ -3,12 +3,12 @@ Chat routes — thin layer calling MessageService.
 HTTP send + SocketIO events.
 """
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import (Blueprint, render_template, request, jsonify, current_app)
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room, leave_room
 
-from models import db, User, Message
+from models import db, User, Message, to_ist, to_ist_time_only
 from services.message import MessageService, _room_key, PAGE_SIZE
 from utils.validators import require_id
 from utils.errors import AppError, api_error, api_ok, handle_unexpected
@@ -47,7 +47,8 @@ def index():
                                           receiver_id=current_user.id,
                                           is_read=False, is_deleted=False)
                   .count())
-        conversations.append({"user": u, "last": last, "unread": unread})
+        ist_time = to_ist_time_only(last.created_at) if last and last.created_at else None
+        conversations.append({"user": u, "last": last, "unread": unread, "ist_time": ist_time})
 
     conversations.sort(
         key=lambda c: c["last"].created_at if c["last"] else datetime.min,
@@ -104,8 +105,8 @@ def send():
             from app import socketio
             room = _room_key(current_user.id, receiver_id)
             socketio.emit("new_message", msg_dict, room=f"chat_{room}")
-        except Exception:
-            pass
+        except Exception as e:
+            print("SocketIO emit failed:", e)
 
         return api_ok(msg_dict, status=201)
 

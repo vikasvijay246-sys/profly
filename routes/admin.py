@@ -29,7 +29,8 @@ def dashboard():
         "pending_payments": Payment.query.filter_by(status="pending").count(),
         "overdue_payments": Payment.query.filter_by(status="overdue").count(),
         "occupied_rooms":   sum(1 for r in Room.query.filter_by(is_active=True).all()
-                                if r.get_occupancy() > 0),
+                                if hasattr(r, "get_occupancy") and (r.get_occupancy() or 0) > 0),
+                                # if r.get_occupancy() > 0),
     }
     recent_payments = Payment.query.order_by(Payment.created_at.desc()).limit(10).all()
     recent_users    = User.query.order_by(User.created_at.desc()).limit(8).all()

@@ -4,11 +4,11 @@ HTTP send + SocketIO events.
 """
 import os
 from datetime import datetime, timedelta
-from flask import (Blueprint, render_template, request, jsonify, current_app)
+from flask import (Blueprint, render_template, request, jsonify, current_app, make_response)
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room, leave_room
 
-from models import db, User, Message, to_ist, to_ist_time_only
+from models import db, User, Message
 from services.message import MessageService, _room_key, PAGE_SIZE
 from utils.validators import require_id
 from utils.errors import AppError, api_error, api_ok, handle_unexpected
@@ -47,8 +47,9 @@ def index():
                                           receiver_id=current_user.id,
                                           is_read=False, is_deleted=False)
                   .count())
-        ist_time = to_ist_time_only(last.created_at) if last and last.created_at else None
-        conversations.append({"user": u, "last": last, "unread": unread, "ist_time": ist_time})
+        # Pass raw UTC timestamp - frontend will convert to IST
+        last_created_at = last.created_at.isoformat() + 'Z' if last and last.created_at else None
+        conversations.append({"user": u, "last": last, "unread": unread, "last_created_at": last_created_at})
 
     conversations.sort(
         key=lambda c: c["last"].created_at if c["last"] else datetime.min,
@@ -69,11 +70,15 @@ def index():
                 _room_key(current_user.id, selected_uid), current_user.id
             )
 
-    return render_template("chat/index.html",
-                           conversations=conversations,
-                           selected_user=selected_user,
-                           messages=messages,
-                           page_size=PAGE_SIZE)
+    response = make_response(render_template("chat/index.html",
+                                       conversations=conversations,
+                                       selected_user=selected_user,
+                                       messages=messages,
+                                       page_size=PAGE_SIZE))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @chat_bp.route("/send", methods=["POST"])
@@ -120,7 +125,7 @@ def send():
 @login_required
 def poll(other_uid):
     since_ts = request.args.get("since", 0, type=float)
-    since    = datetime.utcfromtimestamp(since_ts) if since_ts else datetime.min
+    since    = datetime.fromtimestamp(since_ts) if since_ts else datetime.min
     room     = _room_key(current_user.id, other_uid)
     msgs     = (Message.query.filter_by(room_id=room, is_deleted=False)
                 .filter(Message.created_at > since)

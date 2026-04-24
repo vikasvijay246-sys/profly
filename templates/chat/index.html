@@ -39,7 +39,7 @@
         <div class="conv-meta">
           <span class="role-badge role-{{ c.user.role }}" style="font-size:10px">{{ c.user.role }}</span>
           {% if c.last %}
-          <div class="conv-time text-muted">{{ c.ist_time }}</div>
+          <div class="conv-time text-muted" data-created-at="{{ c.last_created_at }}"><span class="conv-time-display"></span></div>
           {% endif %}
         </div>
       </a>
@@ -98,8 +98,8 @@
           {% if m.content %}
           <div class="msg-text">{{ m.content }}</div>
           {% endif %}
-          <div class="msg-meta">
-            {{ m.created_at_ist or (m.created_at.strftime('%I:%M %p') if m.created_at else '') }}
+          <div class="msg-meta" data-created-at="{{ m.created_at.isoformat() + 'Z' if m.created_at else '' }}">
+            <span class="msg-time-display"></span>
             {% if m.sender_id == current_user.id %}
             <span class="msg-ticks {% if m.is_read %}ticks-read{% else %}ticks-sent{% endif %}">
               {{ '✓✓' if m.is_read else '✓' }}
@@ -150,12 +150,40 @@
 
 {% block scripts %}
 <script>
+// Helper: Convert UTC timestamp to IST string using JavaScript
+function toIST(isoOrTs) {
+  if (!isoOrTs) return '';
+  try {
+    const date = new Date(isoOrTs);
+    return date.toLocaleString('en-IN', { 
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  } catch (e) { return ''; }
+}
+
 const RECEIVER_ID = {{ selected_user.id if selected_user else 'null' }};
 const CURRENT_ID  = {{ current_user.id }};
 const PAGE_SIZE   = {{ page_size }};
 let   lastTs      = 0;
 let   oldestId    = null;
 let   isOnline    = false;
+
+// Convert all timestamps on page load
+document.querySelectorAll('.msg-meta[data-created-at]').forEach(el => {
+  const ts = el.dataset.createdAt;
+  const timeSpan = el.querySelector('.msg-time-display');
+  if (timeSpan && ts) timeSpan.textContent = toIST(ts);
+});
+
+// Convert conversation list timestamps
+document.querySelectorAll('.conv-time[data-created-at]').forEach(el => {
+  const ts = el.dataset.createdAt;
+  const timeSpan = el.querySelector('.conv-time-display');
+  if (timeSpan && ts) timeSpan.textContent = toIST(ts);
+});
 
 // ── Scroll ──────────────────────────────────────────────────
 function scrollBottom(smooth) {
@@ -197,8 +225,8 @@ function renderMsg(m) {
   const del = isMine
     ? `· <button class="msg-del-btn" onclick="deleteMsg(${m.id},this)">🗑</button>` : '';
 
-  // Use IST time from backend (already converted on server)
-  const timeStr = m.created_at_ist || '';
+  // Convert UTC to IST using JavaScript
+  const timeStr = toIST(m.created_at);
 
   wrap.innerHTML = `<div class="msg-bubble">
     ${media}

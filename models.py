@@ -19,20 +19,15 @@ def to_ist(dt):
     """Convert UTC datetime → IST string for display (DD-MM-YYYY HH:MM AM/PM)."""
     if not dt:
         return None
-    # Create timezone-aware datetime and convert to IST
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    ist_dt = dt.astimezone(timezone(timedelta(hours=5, minutes=30)))
-    return ist_dt.strftime("%d-%m-%Y %I:%M %p")
+    ist = dt + timedelta(hours=5, minutes=30)
+    return ist.strftime("%d-%m-%Y %I:%M %p")
 
 def to_ist_time_only(dt):
     """Convert UTC datetime → IST time string (HH:MM AM/PM)."""
     if not dt:
         return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    ist_dt = dt.astimezone(timezone(timedelta(hours=5, minutes=30)))
-    return ist_dt.strftime("%I:%M %p")
+    ist = dt + timedelta(hours=5, minutes=30)
+    return ist.strftime("%I:%M %p")
 
 def current_rent_month():
     """Return current month label: e.g. '2025-06'."""
@@ -87,7 +82,7 @@ class User(UserMixin, db.Model):
         return {
             "id": self.id, "phone": self.phone, "full_name": self.full_name,
             "role": self.role, "is_active": self.is_active, "owner_id": self.owner_id,
-            "created_at": self.created_at.isoformat() + 'Z' if self.created_at else None,
+            "created_at": to_ist(self.created_at),
         }
 
     __table_args__ = (
@@ -180,8 +175,8 @@ class PropertyTenant(db.Model):
             "id": self.id, "property_id": self.property_id, "tenant_id": self.tenant_id,
             "room_id": self.room_id, "room_number": self.room_number,
             "status": self.status,
-            "lease_start": self.lease_start.isoformat() + 'Z' if self.lease_start else None,
-            "lease_end":   self.lease_end.isoformat() + 'Z' if self.lease_end else None,
+            "lease_start": to_ist(self.lease_start),
+            "lease_end":   to_ist(self.lease_end),
             "deposit_amount": float(self.deposit_amount) if self.deposit_amount else None,
         }
 
@@ -234,13 +229,13 @@ class Payment(db.Model):
             "status": self.status,
             "is_paid": self.get_is_paid(),
             "rent_month": self.rent_month,
-            "due_date": self.due_date.isoformat() + 'Z' if self.due_date else None,
-            "paid_at":  self.paid_at.isoformat() + 'Z' if self.paid_at else None,
+            "due_date": to_ist(self.due_date),
+            "paid_at":  to_ist(self.paid_at),
             "transaction_id": self.transaction_id,
             "description": self.description,
             "tenant_id": self.tenant_id,
             "property_id": self.property_id,
-            "created_at": self.created_at.isoformat() + 'Z' if self.created_at else None,
+            "created_at": to_ist(self.created_at),
         }
 
     __table_args__ = (
@@ -344,7 +339,7 @@ class RoomTenant(db.Model):
             "payment_status": self.payment_status,
             "tenant_name": self.tenant.full_name if self.tenant else "?",
             "tenant_phone": self.tenant.phone if self.tenant else "",
-            "assigned_at": self.assigned_at.isoformat() + 'Z' if self.assigned_at else None,
+            "assigned_at": to_ist(self.assigned_at),
             "is_active": self.is_active,
         }
 
@@ -403,7 +398,7 @@ class Message(db.Model):
             "is_deleted":  self.is_deleted,
             "created_at":  (self.created_at.isoformat() + 'Z') if self.created_at else None,
             "created_ts":  int(self.created_at.timestamp()) if self.created_at else 0,
-
+            "created_at_ist": to_ist_time_only(self.created_at),
         }
 
     __table_args__ = (
@@ -436,7 +431,7 @@ class Notification(db.Model):
         return {
             "id": self.id, "title": self.title, "body": self.body,
             "notif_type": self.notif_type, "is_read": self.is_read,
-            "created_at": self.created_at.isoformat() + 'Z' if self.created_at else None,
+            "created_at": to_ist(self.created_at),
         }
 
     __table_args__ = (

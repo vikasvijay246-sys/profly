@@ -68,7 +68,7 @@
           <label class="form-label">Assign to Property <span class="text-muted">(optional)</span></label>
           <select name="property_id" class="form-input">
             <option value="">— No property —</option>
-            {% for p in properties %}<option value="{{ p.id }}">{{ p.name }} (${{ "%.0f"|format(p.monthly_rent) }}/mo)</option>{% endfor %}
+            {% for p in properties %}<option value="{{ p.id }}">{{ p.name }} (₹{{ "%.0f"|format(p.monthly_rent) }}/mo)</option>{% endfor %}
           </select>
         </div>
         <div class="form-group">
@@ -80,7 +80,7 @@
           <input type="date" name="lease_end" class="form-input"/>
         </div>
         <div class="form-group span-2">
-          <label class="form-label">Security Deposit ($)</label>
+          <label class="form-label">Security Deposit (₹)</label>
           <input type="number" step="0.01" name="deposit" class="form-input" placeholder="0.00"/>
         </div>
       </div>

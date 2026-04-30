@@ -48,6 +48,11 @@ class User(UserMixin, db.Model):
     owner_id      = db.Column(db.Integer,
                                db.ForeignKey("users.id", ondelete="SET NULL"),
                                nullable=True)
+    # ── Tenant verification fields ─────────────────────────────────────────────
+    address       = db.Column(db.String(500), nullable=True)
+    photo         = db.Column(db.String(500), nullable=True)      # profile photo path
+    proof_id      = db.Column(db.String(500), nullable=True)      # ID proof path
+    is_verified   = db.Column(db.Boolean, default=False, nullable=False)
     created_at    = db.Column(db.DateTime, default=now_utc, nullable=False)
     updated_at    = db.Column(db.DateTime, default=now_utc, onupdate=now_utc, nullable=False)
 
@@ -82,6 +87,8 @@ class User(UserMixin, db.Model):
         return {
             "id": self.id, "phone": self.phone, "full_name": self.full_name,
             "role": self.role, "is_active": self.is_active, "owner_id": self.owner_id,
+            "address": self.address, "photo": self.photo, "proof_id": self.proof_id,
+            "is_verified": self.is_verified,
             "created_at": to_ist(self.created_at),
         }
 

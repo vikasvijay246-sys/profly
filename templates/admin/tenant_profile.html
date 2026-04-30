@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Tenant Profile — PropFlow{% endblock %}
+{% block page_title %}Tenant Profile{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <!-- Profile Card -->
+    <div class="profile-card">
+        <div class="profile-header">
+            {% if tenant.photo %}
+            <img src="{{ url_for('static', filename=tenant.photo) }}" alt="{{ tenant.full_name }}" class="profile-photo"/>
+            {% else %}
+            <div class="profile-photo profile-photo-placeholder">
+                {{ tenant.full_name[0].upper() }}
+            </div>
+            {% endif %}
+            
+            <div class="profile-info">
+                <h1 class="profile-name">
+                    {{ tenant.full_name }}
+                    {% if tenant.is_verified %}
+                    <span class="badge badge-verified-large">✓ Verified</span>
+                    {% else %}
+                    <span class="badge badge-pending">⚠ Pending Verification</span>
+                    {% endif %}
+                </h1>
+                <p class="profile-phone">{{ tenant.phone }}</p>
+            </div>
+        </div>
+        
+        <div class="profile-details">
+            <div class="detail-row">
+                <span class="detail-label">Address</span>
+                <span class="detail-value">
+                    {% if tenant.address %}
+                    {{ tenant.address }}
+                    {% else %}
+                    <span class="text-muted">Address not provided</span>
+                    {% endif %}
+                </span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">ID Proof</span>
+                <span class="detail-value">
+                    {% if tenant.proof_id %}
+                    <a href="{{ url_for('static', filename=tenant.proof_id) }}" target="_blank" class="btn btn-sm btn-outline">
+                        📄 View Proof
+                    </a>
+                    {% else %}
+                    <span class="text-muted">Address/ID proof required</span>
+                    {% endif %}
+                </span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Status</span>
+                <span class="detail-value">
+                    <span class="badge badge-{{ 'completed' if tenant.is_active else 'overdue' }}">
+                        {{ 'Active' if tenant.is_active else 'Inactive' }}
+                    </span>
+                </span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Owner</span>
+                <span class="detail-value">
+                    {% if tenant.owner_user %}
+                    {{ tenant.owner_user.full_name }}
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Member Since</span>
+                <span class="detail-value">{{ tenant.created_at }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Property Assignments -->
+    <div class="profile-card">
+        <h2 class="card-title">Property Assignments</h2>
+        {% if tenancies %}
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Property</th>
+                        <th>Room</th>
+                        <th>Status</th>
+                        <th>Lease Period</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tenancy in tenancies %}
+                    <tr>
+                        <td>{{ tenancy.property.name if tenancy.property else '—' }}</td>
+                        <td>{{ tenancy.room_number or '—' }}</td>
+                        <td>
+                            <span class="badge badge-{{ 'completed' if tenancy.status == 'active' else 'overdue' }}">
+                                {{ tenancy.status }}
+                            </span>
+                        </td>
+                        <td class="text-muted">
+                            {% if tenancy.lease_start %}
+                            {{ tenancy.lease_start }} — {{ tenancy.lease_end or 'Ongoing' }}
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-16">No property assignments yet.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Payment History -->
+    <div class="profile-card">
+        <h2 class="card-title">Recent Payments</h2>
+        {% if history %}
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Paid On</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in history[:10] %}
+                    <tr>
+                        <td>{{ payment.rent_month or '—' }}</td>
+                        <td>₹{{ "%.2f"|format(payment.amount) }}</td>
+                        <td>
+                            <span class="badge badge-{{ 'completed' if payment.status == 'completed' else ('overdue' if payment.status == 'overdue' else 'pending') }}">
+                                {{ payment.status }}
+                            </span>
+                        </td>
+                        <td class="text-muted">{{ payment.paid_at or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-16">No payment history yet.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Back Button -->
+    <div class="profile-actions">
+        <a href="{{ url_for('admin.users', role='tenant') }}" class="btn btn-primary">← Back to Tenants</a>
+    </div>
+</div>
+{% endblock %}

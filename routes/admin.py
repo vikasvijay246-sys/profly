@@ -140,6 +140,35 @@ def tenant_history(tid):
     return render_template("admin/tenant_history.html", tenant=tenant, history=history)
 
 
+# ── Tenant Profile (Admin view) ───────────────────────────────────────────────
+@admin_bp.route("/tenants/<int:tid>/profile")
+@login_required
+@role_required("admin")
+def tenant_profile(tid):
+    """Display tenant profile with verification status for admin."""
+    tenant = User.query.filter_by(id=tid, role="tenant").first_or_404()
+    
+    # Recalculate verification status
+    from services import check_verification_status
+    tenant.is_verified = check_verification_status(
+        tenant.address, tenant.photo, tenant.proof_id
+    )
+    db.session.commit()
+    
+    # Get tenant's property assignments
+    from models import PropertyTenant
+    tenancies = PropertyTenant.query.filter_by(tenant_id=tid).all()
+    
+    # Get payment history
+    from services import tenant_payment_history
+    history = tenant_payment_history(tenant.id, months=12)
+    
+    return render_template("admin/tenant_profile.html", 
+                           tenant=tenant, 
+                           tenancies=tenancies,
+                           history=history)
+
+
 # ── Payments ──────────────────────────────────────────────────────────────────
 @admin_bp.route("/payments")
 @login_required

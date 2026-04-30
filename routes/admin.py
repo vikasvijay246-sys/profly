@@ -112,6 +112,17 @@ def delete_user(uid):
     if user.id == 1:
         flash("Cannot delete the primary admin.", "error")
         return redirect(url_for("admin.users"))
+    if user.role == "owner":
+        flash("Cannot delete an owner. Please reassign or delete their properties first.", "error")
+        return redirect(url_for("admin.users"))
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        flash("User deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting user: {str(e)}", "error")    
+        return redirect(url_for("admin.users"))
     db.session.delete(user)
     db.session.commit()
     flash("User deleted.", "success")

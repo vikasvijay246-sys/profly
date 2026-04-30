@@ -16,7 +16,7 @@
           <td><strong>{{ p.name }}</strong>{% if p.unit_number %} <span class="text-muted">#{{ p.unit_number }}</span>{% endif %}</td>
           <td class="text-muted">{{ p.city }}{% if p.state %}, {{ p.state }}{% endif %}</td>
           <td>{{ p.property_type }}</td>
-          <td><strong>${{ "%.0f"|format(p.monthly_rent) }}</strong></td>
+          <td><strong>₹{{ "%.0f"|format(p.monthly_rent) }}</strong></td>
           <td><span class="badge badge-{{ 'completed' if p.status=='available' else 'pending' if p.status=='occupied' else 'overdue' }}">{{ p.status }}</span></td>
           <td>{{ p.owner.full_name if p.owner else '—' }}</td>
           <td>

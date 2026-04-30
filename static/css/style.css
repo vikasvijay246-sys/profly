@@ -91,6 +91,18 @@ body {
 a { color: var(--c-blue); }
 a:hover { text-decoration: underline; }
 
+/* -------making image logo massive simple atractions */
+.logo {
+  width: 200px; height: 150px; border-radius: 50px;
+  fill: drop-shadow(0 10px 25px rgba(0,0,0,.3));
+  transition:all .3s ease;
+  z-index: 1;
+  /* padding: 50px; */
+  border-radius: 50px;
+  /* backdrop-filter: blur(10px); */
+  background:white;
+}
+
 /* ── Sidebar ────────────────────────────────────────── */
 .sidebar {
   position: fixed; top: 0; left: 0;

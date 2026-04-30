@@ -29,7 +29,7 @@
           <span class="text-muted">{{ p.property_type }}</span>
         </div>
         <div class="prop-footer">
-          <div class="prop-rent">${{ "%.0f"|format(p.monthly_rent) }}<span class="text-muted">/mo</span></div>
+          <div class="prop-rent">₹{{ "%.0f"|format(p.monthly_rent) }}<span class="text-muted">/mo</span></div>
           <div class="action-btns">
             <button class="btn btn-ghost btn-xs" onclick='openEditProp({{ p.to_dict()|tojson }})'>Edit</button>
             <form method="POST" action="{{ url_for('owner.delete_property', pid=p.id) }}" style="display:inline" onsubmit="return confirm('Delete this property?')">

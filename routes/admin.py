@@ -130,6 +130,15 @@ def delete_user(uid):
 
 
 # ── Payment history per tenant ────────────────────────────────────────────────
+@admin_bp.route("/tenants")
+@login_required
+@role_required("admin")
+def tenants():
+    """List all tenants for admin."""
+    all_tenants = User.query.filter_by(role="tenant").order_by(User.created_at.desc()).all()
+    return render_template("admin/tenants.html", tenants=all_tenants)
+
+
 @admin_bp.route("/tenants/<int:tid>/history")
 @login_required
 @role_required("admin")
@@ -167,6 +176,55 @@ def tenant_profile(tid):
                            tenant=tenant, 
                            tenancies=tenancies,
                            history=history)
+
+
+@admin_bp.route("/tenants/<int:tid>/edit-profile", methods=["GET", "POST"])
+@login_required
+@role_required("admin")
+def edit_tenant_profile(tid):
+    """Edit tenant profile including address, photo, and proof ID for admin."""
+    tenant = User.query.filter_by(id=tid, role="tenant").first_or_404()
+    
+    if request.method == "POST":
+        try:
+            from flask import current_app
+            from services import save_uploaded_file, get_photo_filename, get_proof_filename, check_verification_status
+            
+            # Update basic info
+            if request.form.get("full_name"):
+                tenant.full_name = request.form.get("full_name")
+            
+            if request.form.get("address"):
+                tenant.address = request.form.get("address")
+            
+            # Handle photo upload
+            if request.files.get("photo") and request.files["photo"].filename:
+                upload_folder = current_app.config.get("UPLOAD_FOLDER", "static/uploads")
+                photo_filename = get_photo_filename(tenant.full_name)
+                photo_path = save_uploaded_file(request.files["photo"], upload_folder, photo_filename)
+                tenant.photo = photo_path
+            
+            # Handle proof ID upload
+            if request.files.get("proof_id") and request.files["proof_id"].filename:
+                upload_folder = current_app.config.get("UPLOAD_FOLDER", "static/uploads")
+                proof_filename = get_proof_filename(tenant.full_name)
+                proof_path = save_uploaded_file(request.files["proof_id"], upload_folder, proof_filename)
+                tenant.proof_id = proof_path
+            
+            # Recalculate verification status
+            tenant.is_verified = check_verification_status(
+                tenant.address, tenant.photo, tenant.proof_id
+            )
+            
+            db.session.commit()
+            flash("✅ Profile updated successfully!", "success")
+            return redirect(url_for("admin.tenant_profile", tid=tid))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating profile: {str(e)}", "error")
+            return redirect(url_for("admin.edit_tenant_profile", tid=tid))
+    
+    return render_template("admin/edit_tenant_profile.html", tenant=tenant)
 
 
 # ── Payments ──────────────────────────────────────────────────────────────────

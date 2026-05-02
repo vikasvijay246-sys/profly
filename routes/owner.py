@@ -12,7 +12,7 @@ from services import (generate_monthly_rent, mark_overdue_payments,
 from utils.validators import (validate_create_tenant, validate_create_payment,
                                optional_date, optional_id, require_amount,
                                require_payment_type, optional_rent_month,
-                               optional_string, require_payment_status)
+                               optional_string, require_payment_status,optional_amount)
 from utils.errors import AppError, ValidationError
 
 owner_bp = Blueprint("owner", __name__, url_prefix="/owner")
@@ -349,6 +349,55 @@ def tenant_profile(tid):
                            tenant=tenant, 
                            tenancies=tenancies,
                            history=history)
+
+
+@owner_bp.route("/tenants/<int:tid>/edit-profile", methods=["GET", "POST"])
+@login_required
+@role_required("owner")
+def edit_tenant_profile(tid):
+    """Edit tenant profile including address, photo, and proof ID."""
+    tenant = User.query.filter_by(id=tid, owner_id=current_user.id, role="tenant").first_or_404()
+    
+    if request.method == "POST":
+        try:
+            from flask import current_app
+            from services import save_uploaded_file, get_photo_filename, get_proof_filename, check_verification_status
+            
+            # Update basic info
+            if request.form.get("full_name"):
+                tenant.full_name = request.form.get("full_name")
+            
+            if request.form.get("address"):
+                tenant.address = request.form.get("address")
+            
+            # Handle photo upload
+            if request.files.get("photo") and request.files["photo"].filename:
+                upload_folder = current_app.config.get("UPLOAD_FOLDER", "static/uploads")
+                photo_filename = get_photo_filename(tenant.full_name)
+                photo_path = save_uploaded_file(request.files["photo"], upload_folder, photo_filename)
+                tenant.photo = photo_path
+            
+            # Handle proof ID upload
+            if request.files.get("proof_id") and request.files["proof_id"].filename:
+                upload_folder = current_app.config.get("UPLOAD_FOLDER", "static/uploads")
+                proof_filename = get_proof_filename(tenant.full_name)
+                proof_path = save_uploaded_file(request.files["proof_id"], upload_folder, proof_filename)
+                tenant.proof_id = proof_path
+            
+            # Recalculate verification status
+            tenant.is_verified = check_verification_status(
+                tenant.address, tenant.photo, tenant.proof_id
+            )
+            
+            db.session.commit()
+            flash("✅ Profile updated successfully!", "success")
+            return redirect(url_for("owner.tenant_profile", tid=tid))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating profile: {str(e)}", "error")
+            return redirect(url_for("owner.edit_tenant_profile", tid=tid))
+    
+    return render_template("owner/edit_tenant_profile.html", tenant=tenant)
 
 
 # ── Payments ──────────────────────────────────────────────────────────────────

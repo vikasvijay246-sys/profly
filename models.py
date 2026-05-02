@@ -48,6 +48,11 @@ class User(UserMixin, db.Model):
     owner_id      = db.Column(db.Integer,
                                db.ForeignKey("users.id", ondelete="SET NULL"),
                                nullable=True)
+    # Profile fields
+    address       = db.Column(db.Text, nullable=True)  # For verification
+    photo         = db.Column(db.String(255), nullable=True)  # Path to profile photo
+    proof_id      = db.Column(db.String(255), nullable=True)  # Path to ID proof document
+    is_verified   = db.Column(db.Boolean, default=False, nullable=False)  # Verification status
     created_at    = db.Column(db.DateTime, default=now_utc, nullable=False)
     updated_at    = db.Column(db.DateTime, default=now_utc, onupdate=now_utc, nullable=False)
 

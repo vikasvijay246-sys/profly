@@ -22,7 +22,25 @@
       <tbody>
         {% for u in users %}
         <tr>
-          <td><div class="user-cell"><div class="avatar avatar-sm">{{ u.full_name[0].upper() }}</div>{{ u.full_name }}</div></td>
+          <td>
+            <div class="user-cell">
+              {% if u.role == 'tenant' %}
+              <a href="{{ url_for('admin.tenant_profile', tid=u.id) }}" class="tenant-link">
+                {% if u.photo %}
+                <img src="{{ url_for('static', filename=u.photo) }}" alt="{{ u.full_name }}" class="avatar avatar-sm" style="object-fit: cover;"/>
+                {% else %}
+                <div class="avatar avatar-sm" style="background:#dbeafe;color:#1d4ed8">{{ u.full_name[0].upper() }}</div>
+                {% endif %}
+                {{ u.full_name }}
+                {% if u.is_verified %}
+                <span class="badge badge-verified" title="Verified">✓</span>
+                {% endif %}
+              </a>
+              {% else %}
+              <div class="avatar avatar-sm">{{ u.full_name[0].upper() }}</div>{{ u.full_name }}
+              {% endif %}
+            </div>
+          </td>
           <td class="text-muted">{{ u.phone }}</td>
           <td><span class="role-badge role-{{ u.role }}">{{ u.role }}</span></td>
           <td><span class="badge badge-{{ 'completed' if u.is_active else 'overdue' }}">{{ 'Active' if u.is_active else 'Inactive' }}</span></td>

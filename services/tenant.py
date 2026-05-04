@@ -37,6 +37,7 @@ class TenantService(BaseService):
         phone     = data["phone"]
         full_name = data["full_name"]
         password  = data["password"]
+        address   = data.get("address")  # Optional address for verification
 
         # Guard: phone must be unique
         if User.query.filter_by(phone=phone).first():
@@ -50,6 +51,7 @@ class TenantService(BaseService):
             full_name= full_name,
             role     = "tenant",
             owner_id = owner_id,
+            address  = address,
         )
         tenant.set_password(password)
 

@@ -12,7 +12,7 @@ from services import (generate_monthly_rent, mark_overdue_payments,
 from utils.validators import (validate_create_tenant, validate_create_payment,
                                optional_date, optional_id, require_amount,
                                require_payment_type, optional_rent_month,
-                               optional_string, require_payment_status)
+                               optional_string, require_payment_status,optional_amount)
 from utils.errors import AppError, ValidationError
 
 owner_bp = Blueprint("owner", __name__, url_prefix="/owner")
@@ -210,7 +210,49 @@ def tenants():
 def add_tenant():
     try:
         data   = validate_create_tenant(request.form)
+        
+        # Add address to tenant data
+        data["address"] = optional_string(request.form.get("address"), "address", max_len=500)
+        
         tenant = _tenant_svc.create(data, owner_id=current_user.id)
+
+        # Handle file uploads for photo and proof
+        from flask import current_app
+        from services import (save_uploaded_file, get_photo_filename, 
+                             get_proof_filename, check_verification_status)
+        
+        upload_folder = current_app.config.get("UPLOAD_FOLDER", "static/uploads")
+        
+        photo_path = None
+        proof_path = None
+        
+        # Save photo if uploaded
+        if request.files.get("photo") and request.files["photo"].filename:
+            photo_filename = get_photo_filename(tenant.full_name)
+            photo_path = save_uploaded_file(
+                request.files["photo"], 
+                upload_folder, 
+                photo_filename
+            )
+        
+        # Save proof if uploaded
+        if request.files.get("proof_id") and request.files["proof_id"].filename:
+            proof_filename = get_proof_filename(tenant.full_name)
+            proof_path = save_uploaded_file(
+                request.files["proof_id"], 
+                upload_folder, 
+                proof_filename
+            )
+        
+        # Update tenant with file paths and check verification
+        if photo_path or proof_path or data.get("address"):
+            from models import db
+            tenant.photo = photo_path
+            tenant.proof_id = proof_path
+            tenant.is_verified = check_verification_status(
+                data.get("address"), photo_path, proof_path
+            )
+            db.session.commit()
 
         # Optional property assignment
         prop_id = optional_id(request.form.get("property_id"), "property_id")
@@ -280,6 +322,82 @@ def tenant_history(tid):
     tenant = User.query.filter_by(id=tid, owner_id=current_user.id, role="tenant").first_or_404()
     history = _payment_svc.history(tenant.id, months=24)
     return render_template("owner/tenant_history.html", tenant=tenant, history=history)
+
+
+@owner_bp.route("/tenants/<int:tid>/profile")
+@login_required
+@role_required("owner")
+def tenant_profile(tid):
+    """Display tenant profile with verification status."""
+    tenant = User.query.filter_by(id=tid, owner_id=current_user.id, role="tenant").first_or_404()
+    
+    # Recalculate verification status
+    from services import check_verification_status
+    tenant.is_verified = check_verification_status(
+        tenant.address, tenant.photo, tenant.proof_id
+    )
+    db.session.commit()
+    
+    # Get tenant's property assignments
+    from models import PropertyTenant
+    tenancies = PropertyTenant.query.filter_by(tenant_id=tid).all()
+    
+    # Get payment history
+    history = _payment_svc.history(tenant.id, months=12)
+    
+    return render_template("owner/tenant_profile.html", 
+                           tenant=tenant, 
+                           tenancies=tenancies,
+                           history=history)
+
+
+@owner_bp.route("/tenants/<int:tid>/edit-profile", methods=["GET", "POST"])
+@login_required
+@role_required("owner")
+def edit_tenant_profile(tid):
+    """Edit tenant profile including address, photo, and proof ID."""
+    tenant = User.query.filter_by(id=tid, owner_id=current_user.id, role="tenant").first_or_404()
+    
+    if request.method == "POST":
+        try:
+            from flask import current_app
+            from services import save_uploaded_file, get_photo_filename, get_proof_filename, check_verification_status
+            
+            # Update basic info
+            if request.form.get("full_name"):
+                tenant.full_name = request.form.get("full_name")
+            
+            if request.form.get("address"):
+                tenant.address = request.form.get("address")
+            
+            # Handle photo upload
+            if request.files.get("photo") and request.files["photo"].filename:
+                upload_folder = current_app.config.get("UPLOAD_FOLDER", "static/uploads")
+                photo_filename = get_photo_filename(tenant.full_name)
+                photo_path = save_uploaded_file(request.files["photo"], upload_folder, photo_filename)
+                tenant.photo = photo_path
+            
+            # Handle proof ID upload
+            if request.files.get("proof_id") and request.files["proof_id"].filename:
+                upload_folder = current_app.config.get("UPLOAD_FOLDER", "static/uploads")
+                proof_filename = get_proof_filename(tenant.full_name)
+                proof_path = save_uploaded_file(request.files["proof_id"], upload_folder, proof_filename)
+                tenant.proof_id = proof_path
+            
+            # Recalculate verification status
+            tenant.is_verified = check_verification_status(
+                tenant.address, tenant.photo, tenant.proof_id
+            )
+            
+            db.session.commit()
+            flash("✅ Profile updated successfully!", "success")
+            return redirect(url_for("owner.tenant_profile", tid=tid))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating profile: {str(e)}", "error")
+            return redirect(url_for("owner.edit_tenant_profile", tid=tid))
+    
+    return render_template("owner/edit_tenant_profile.html", tenant=tenant)
 
 
 # ── Payments ──────────────────────────────────────────────────────────────────

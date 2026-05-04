@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ tenant.full_name }} - Profile{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="edit-profile-container">
+        
+        <!-- Back Button -->
+        <div class="mb-3">
+            <a href="{{ url_for('owner.tenant_profile', tid=tenant.id) }}" class="btn btn-outline-secondary btn-sm">
+                ← Back to Profile
+            </a>
+        </div>
+
+        <!-- Edit Profile Card -->
+        <div class="edit-profile-card">
+            <h2 class="mb-4">✎ Edit Tenant Profile</h2>
+
+            <form method="POST" enctype="multipart/form-data">
+                
+                <!-- Verification Status Badge -->
+                <div class="alert {% if tenant.is_verified %}alert-success{% else %}alert-warning{% endif %}" role="alert">
+                    <strong>
+                        {% if tenant.is_verified %}
+                            <i class="fas fa-check-circle"></i> ✓ Verified Tenant
+                        {% else %}
+                            <i class="fas fa-exclamation-triangle"></i> ⚠ Pending Verification
+                        {% endif %}
+                    </strong>
+                    <p class="mt-2 mb-0">
+                        All required documents: 
+                        {% if tenant.address %}<span class="badge bg-success">Address ✓</span>{% else %}<span class="badge bg-danger">Address ✗</span>{% endif %}
+                        {% if tenant.photo %}<span class="badge bg-success">Photo ✓</span>{% else %}<span class="badge bg-danger">Photo ✗</span>{% endif %}
+                        {% if tenant.proof_id %}<span class="badge bg-success">Proof ✓</span>{% else %}<span class="badge bg-danger">Proof ✗</span>{% endif %}
+                    </p>
+                </div>
+
+                <div class="row">
+                    <!-- Left Column: Photo -->
+                    <div class="col-md-4">
+                        <div class="profile-photo-section">
+                            <h5 class="mb-3">👤 Profile Photo</h5>
+                            
+                            <!-- Current Photo Display -->
+                            {% if tenant.photo %}
+                            <div class="current-photo mb-3">
+                               <div class="hexagon">
+                                <img src="{{ url_for('static', filename=tenant.photo) }}" alt="{{ tenant.full_name }}" class="img-fluid rounded" style="max-width: 100%; max-height: 250px; object-fit: cover;">
+                               </div>
+                                <p class="text-muted small mt-2">Current photo</p>
+                            </div>
+                            {% else %}
+                            <div class="photo-placeholder mb-3">
+                                <div style="width: 100%; height: 200px; background: #e9ecef; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-image fa-3x text-muted"></i>
+                                </div>
+                                <p class="text-muted small mt-2">No photo uploaded</p>
+                            </div>
+                            {% endif %}
+
+                            <!-- Photo Upload -->
+                            <div class="form-group">
+                                <label class="form-label fw-bold">📤 Upload New Photo</label>
+                                <input type="file" name="photo" class="form-control" accept="image/*">
+                                <small class="form-text text-muted">JPG, PNG (Max 5MB)</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Details -->
+                    <div class="col-md-8">
+                        <!-- Full Name -->
+                        <div class="form-group mb-4">
+                            <label class="form-label fw-bold">👤 Full Name</label>
+                            <input type="text" name="full_name" class="form-control form-control-lg" 
+                                   value="{{ tenant.full_name }}" required>
+                        </div>
+
+                        <!-- Phone (Read-Only) -->
+                        <div class="form-group mb-4">
+                            <label class="form-label fw-bold">📞 Phone Number (Cannot Change)</label>
+                            <input type="text" class="form-control form-control-lg" 
+                                   value="{{ tenant.phone }}" disabled>
+                            <small class="form-text text-muted">Phone number is set at account creation</small>
+                        </div>
+
+                        <!-- Address -->
+                        <div class="form-group mb-4">
+                            <label class="form-label fw-bold">📍 Complete Address</label>
+                            <textarea name="address" class="form-control" rows="4" placeholder="Enter full residential address...">{{ tenant.address or '' }}</textarea>
+                            <small class="form-text text-muted">Required for verification</small>
+                        </div>
+
+                        <!-- ID Proof Section -->
+                        <div class="form-group mb-4">
+                            <h5 class="mb-3">🆔 ID Proof Document</h5>
+                            
+                            <!-- Current Proof Display -->
+                            {% if tenant.proof_id %}
+                            <div class="current-proof mb-3 p-3 bg-light rounded">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <i class="fas fa-file-pdf fa-2x text-danger"></i>
+                                        <p class="mb-0 mt-2"><strong>Proof Document Uploaded</strong></p>
+                                        <p class="text-muted small">Click below to view</p>
+                                    </div>
+                                    <a href="{{ url_for('static', filename=tenant.proof_id) }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-eye"></i> View Proof
+                                    </a>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="no-proof mb-3 p-3 bg-light rounded">
+                                <i class="fas fa-file-slash fa-2x text-muted"></i>
+                                <p class="text-muted mt-2 mb-0">No proof document uploaded</p>
+                            </div>
+                            {% endif %}
+
+                            <!-- Proof Upload -->
+                            <div class="form-group">
+                                <label class="form-label fw-bold">📤 Upload/Update ID Proof</label>
+                                <input type="file" name="proof_id" class="form-control" 
+                                       accept=".pdf,.jpg,.jpeg,.png,.webp">
+                                <small class="form-text text-muted">PDF or Image (JPG, PNG, WebP). Max 10MB</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Verification Checklist -->
+                <div class="verification-checklist mt-5 pt-4 border-top">
+                    <h5 class="mb-3">✅ Verification Checklist</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="checklist-item mb-2">
+                                {% if tenant.full_name %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-circle text-danger"></i>
+                                {% endif %}
+                                <strong>Full Name</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="checklist-item mb-2">
+                                {% if tenant.address %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-circle text-danger"></i>
+                                {% endif %}
+                                <strong>Complete Address</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="checklist-item mb-2">
+                                {% if tenant.photo %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-circle text-danger"></i>
+                                {% endif %}
+                                <strong>Profile Photo</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="checklist-item mb-2">
+                                {% if tenant.proof_id %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-circle text-danger"></i>
+                                {% endif %}
+                                <strong>ID Proof Document</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="form-actions mt-5 pt-4 border-top">
+                    <a href="{{ url_for('owner.tenant_profile', tid=tenant.id) }}" class="btn btn-outline-secondary btn-lg">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    
+.edit-profile-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.edit-profile-card {
+    background: white;
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.edit-profile-card h2 {
+    color: #333;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid #0d6efd;
+}
+
+.profile-photo-section {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.profile-photo-section h5 {
+    color: #333;
+    font-weight: 600;
+}
+
+.current-photo img,
+.photo-placeholder {
+    border-radius: 10px;
+    border: 2px solid #dee2e6;
+}
+
+.form-control,
+.form-control-lg {
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+    transition: all 0.3s;
+}
+
+.form-control:focus,
+.form-control-lg:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-control:disabled,
+.form-control[disabled] {
+    background-color: #e9ecef;
+    color: #666;
+}
+
+.form-label {
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.alert {
+    border-radius: 10px;
+    margin-bottom: 25px;
+    border: 2px solid;
+}
+
+.alert-success {
+    background-color: #d1e7dd;
+    border-color: #badbcc;
+    color: #0f5132;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    border-color: #ffecb5;
+    color: #664d03;
+}
+
+.alert-success i,
+.alert-warning i {
+    margin-right: 8px;
+}
+
+.current-proof,
+.no-proof {
+    border: 2px dashed #dee2e6;
+    background-color: #f8f9fa;
+}
+
+.current-proof i,
+.no-proof i {
+    opacity: 0.7;
+}
+
+.verification-checklist {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.checklist-item {
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checklist-item i {
+    font-size: 18px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: flex-end;
+}
+
+.form-actions .btn {
+    min-width: 140px;
+    font-weight: 600;
+    border-radius: 8px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0a58ca 0%, #0845b3 100%);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .edit-profile-card {
+        padding: 20px;
+    }
+    
+    .col-md-4,
+    .col-md-8 {
+        margin-bottom: 20px;
+    }
+
+    .form-actions {
+        flex-direction: column-reverse;
+    }
+
+    .form-actions .btn {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}

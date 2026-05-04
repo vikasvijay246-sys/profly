@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ tenant.full_name }} - Profile (Admin){% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="edit-profile-container">
+        
+        <!-- Back Button -->
+        <div class="mb-3">
+            <a href="{{ url_for('admin.tenant_profile', tid=tenant.id) }}" class="btn btn-outline-secondary btn-sm">
+                ← Back to Profile
+            </a>
+        </div>
+
+        <!-- Edit Profile Card -->
+        <div class="edit-profile-card">
+            <h3 class="mb-4">✎ Edit Tenant Profile</h3>
+
+            <form method="POST" enctype="multipart/form-data">
+                
+                <!-- Verification Status Badge -->
+                <div class="alert {% if tenant.is_verified %}alert-success{% else %}alert-warning{% endif %}" role="alert">
+                    <strong>
+                        {% if tenant.is_verified %}
+                            <i class="fas fa-check-circle"></i> ✓ Verified Tenant
+                        {% else %}
+                            <i class="fas fa-exclamation-triangle"></i> ⚠ Pending Verification
+                        {% endif %}
+                    </strong>
+                    <p class="mt-2 mb-0">
+                        Documents: 
+                        {% if tenant.address %}<span class="badge bg-success">Address ✓</span>{% else %}<span class="badge bg-danger">Address ✗</span>{% endif %}
+                        {% if tenant.photo %}<span class="badge bg-success">Photo ✓</span>{% else %}<span class="badge bg-danger">Photo ✗</span>{% endif %}
+                        {% if tenant.proof_id %}<span class="badge bg-success">Proof ✓</span>{% else %}<span class="badge bg-danger">Proof ✗</span>{% endif %}
+                    </p>
+                </div>
+
+                <div class="row">
+                    <!-- Left Column: Photo -->
+                    <div class="col-md-4">
+                        <div class="profile-photo-section">
+                            <h5 class="mb-3">👤 Profile Photo</h5>
+                            
+                            <!-- Current Photo Display -->
+                            {% if tenant.photo %}
+                            <div class="current-photo mb-3">
+                                <img src="{{ url_for('static', filename=tenant.photo) }}" alt="{{ tenant.full_name }}" class="img-fluid rounded" style="max-width: 100%; max-height: 200px; object-fit: cover;">
+                            </div>
+                            {% else %}
+                            <div class="photo-placeholder mb-3">
+                                <div style="width: 100%; height: 150px; background: #e9ecef; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-image fa-2x text-muted"></i>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Photo Upload -->
+                            <div class="form-group">
+                                <label class="form-label fw-bold">📤 Upload Photo</label>
+                                <input type="file" name="photo" class="form-control" accept="image/*">
+                                <small class="form-text text-muted">JPG, PNG (Max 5MB)</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Details -->
+                    <div class="col-md-8">
+                        <!-- Full Name -->
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">👤 Full Name</label>
+                            <input type="text" name="full_name" class="form-control" 
+                                   value="{{ tenant.full_name }}" required>
+                        </div>
+
+                        <!-- Phone (Read-Only) -->
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">📞 Phone Number</label>
+                            <input type="text" class="form-control" 
+                                   value="{{ tenant.phone }}" disabled>
+                            <small class="form-text text-muted">Phone number cannot be changed</small>
+                        </div>
+
+                        <!-- Address -->
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">📍 Address</label>
+                            <textarea name="address" class="form-control" rows="3" placeholder="Enter address...">{{ tenant.address or '' }}</textarea>
+                        </div>
+
+                        <!-- ID Proof Section -->
+                        <div class="form-group mb-3">
+                            <h5 class="mb-3">🆔 ID Proof</h5>
+                            
+                            <!-- Current Proof Display -->
+                            {% if tenant.proof_id %}
+                            <div class="current-proof mb-3 p-2 bg-light rounded">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <i class="fas fa-file-pdf fa-lg text-danger"></i>
+                                        <span class="ms-2">Document Uploaded</span>
+                                    </div>
+                                    <a href="{{ url_for('static', filename=tenant.proof_id) }}" target="_blank"  rel="noopener" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> VIEW
+                                    </a>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Proof Upload -->
+                            <div class="form-group">
+                                <label class="form-label fw-bold">📤 Upload ID Proof</label>
+                                <input type="file" name="proof_id" class="form-control" 
+                                       accept=".pdf,.jpg,.jpeg,.png,.webp">
+                                <small class="form-text text-muted">PDF or Image (Max 10MB)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="form-actions mt-4 pt-3 border-top">
+                    <a href="{{ url_for('admin.tenant_profile', tid=tenant.id) }}" class="btn btn-outline-secondary">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.edit-profile-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.edit-profile-card {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.edit-profile-card h3 {
+    color: #333;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #0d6efd;
+}
+
+.profile-photo-section {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.profile-photo-section h5 {
+    color: #333;
+    font-weight: 600;
+}
+
+.current-photo img,
+.photo-placeholder {
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+}
+
+.form-control {
+    border-radius: 6px;
+    border: 2px solid #dee2e6;
+    transition: all 0.3s;
+}
+
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-control:disabled {
+    background-color: #e9ecef;
+    color: #666;
+}
+
+.form-label {
+    color: #333;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.alert {
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 2px solid;
+}
+
+.alert-success {
+    background-color: #d1e7dd;
+    border-color: #badbcc;
+    color: #0f5132;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    border-color: #ffecb5;
+    color: #664d03;
+}
+
+.alert-success i,
+.alert-warning i {
+    margin-right: 8px;
+}
+
+.current-proof {
+    border: 2px dashed #dee2e6;
+    background-color: #f8f9fa;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.form-actions .btn {
+    min-width: 120px;
+    font-weight: 600;
+    border-radius: 6px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0a58ca 0%, #0845b3 100%);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .edit-profile-card {
+        padding: 20px;
+    }
+    
+    .col-md-4,
+    .col-md-8 {
+        margin-bottom: 20px;
+    }
+
+    .form-actions {
+        flex-direction: column-reverse;
+    }
+
+    .form-actions .btn {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}

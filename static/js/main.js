@@ -81,5 +81,5 @@ if (typeof socket !== 'undefined') {
     }     
   });
 }
-socket.on("new_message", function(msg) {console.log("New message received:", msg);appendMessage(msg);});
+// socket.on("new_message", function(msg) {console.log("New message received:", msg);appendMessage(msg);});
 

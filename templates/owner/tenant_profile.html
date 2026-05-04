@@ -103,8 +103,8 @@
                                 <td class="fw-bold">ID Proof:</td>
                                 <td>
                                     {% if tenant.proof_id %}
-                                        <a href="{{ tenant.proof_id }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-file-pdf"></i> View
+                                        <a href="{{ url_for('static', filename=tenant.proof_id) }}" target="_blank"  rel="noopener" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-file-pdf"></i>VIEW
                                         </a>
                                     {% else %}
                                         <span class="text-muted">Not uploaded</span>

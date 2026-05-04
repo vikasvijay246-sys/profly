@@ -107,8 +107,8 @@
                                 <td>
                                     {% if tenant.proof_id %}
                                     <a href="{{ url_for('static', filename=tenant.proof_id) }}" target="_blank"
-                                        class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-eye"></i> View
+                                         class="badge-btn view-btn">
+                                            <i class="fas fa-eye"></i> View
                                     </a>
                                     {% else %}
                                     <span class="text-muted">Not uploaded</span>
@@ -141,6 +141,27 @@
 </div>
 
 <style>
+    .badge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 20px;
+    transition: all 0.3s ease;
+}
+/* view button(soft view) */
+.view-btn {
+    background-color: #e7f1ff;
+    color:blue;
+    /* border: 1px solid #007bff; */
+}
+.view-btn:hover {
+    background-color: #0d6efd;
+    color: white;
+}
     .profile-container {
         max-width: 800px;
         margin: 0 auto;

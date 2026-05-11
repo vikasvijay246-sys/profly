@@ -4,7 +4,7 @@ No business logic, no direct DB queries (except simple reads in dashboard).
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from models import db, User, Property, PropertyTenant, Payment, Room, now_utc
+from models import db, User, Property, PropertyTenant, Payment, Room, RoomTenant, now_utc
 from routes import role_required
 from services import (generate_monthly_rent, mark_overdue_payments,
                       owner_payment_summary, push_notification, fmt_month,
@@ -24,16 +24,26 @@ _payment_svc = PaymentService()
 @login_required
 @role_required("owner")
 def dashboard():
+    props = Property.query.filter_by(owner_id=current_user.id, is_deleted=False).all()
+    if len(props) == 1:
+        return redirect(url_for('owner.property_dashboard', property_id=props[0].id))
+    else:
+        return redirect(url_for('owner.property_selection'))
+
+
+@owner_bp.route("/property/<int:property_id>/dashboard")
+@login_required
+@role_required("owner")
+def property_dashboard(property_id):
+    prop = Property.query.filter_by(id=property_id, owner_id=current_user.id, is_deleted=False).first_or_404()
+
     mark_overdue_payments()
 
-    props  = Property.query.filter_by(owner_id=current_user.id, is_deleted=False).all()
-    p_ids  = [p.id for p in props]
-    rooms  = Room.query.filter_by(owner_id=current_user.id, is_active=True).all()
-    t_q    = User.query.filter_by(owner_id=current_user.id, role="tenant")
+    rooms = Room.query.filter_by(property_id=property_id, is_active=True).all()
+    tenants = PropertyTenant.query.filter_by(property_id=property_id, status="active").all()
 
-    # Batch occupancy — avoid N+1
+    # Batch occupancy
     from sqlalchemy import func
-    from models import RoomTenant
     occ_map = {}
     if rooms:
         rows = (db.session.query(RoomTenant.room_id, func.count(RoomTenant.id))
@@ -43,14 +53,57 @@ def dashboard():
         occ_map = {rid: cnt for rid, cnt in rows}
 
     stats = {
-        "total_properties": len(props),
-        "occupied":         sum(1 for p in props if p.status == "occupied"),
-        "available":        sum(1 for p in props if p.status == "available"),
-        "total_tenants":    t_q.count(),
-        "total_rooms":      len(rooms),
-        "occupied_rooms":   sum(1 for r in rooms if occ_map.get(r.id, 0) > 0),
-        "vacant_rooms":     sum(1 for r in rooms if occ_map.get(r.id, 0) == 0),
+        "total_tenants": len(tenants),
+        "total_rooms": len(rooms),
+        "occupied_rooms": sum(1 for r in rooms if occ_map.get(r.id, 0) > 0),
+        "vacant_rooms": sum(1 for r in rooms if occ_map.get(r.id, 0) == 0),
         "revenue": float(
+            db.session.query(db.func.coalesce(db.func.sum(Payment.amount), 0))
+            .filter(Payment.property_id == property_id, Payment.status == "completed")
+            .scalar() or 0
+        ),
+        "pending_payments": Payment.query.filter_by(property_id=property_id, status="pending").count(),
+        "overdue_payments": Payment.query.filter_by(property_id=property_id, status="overdue").count(),
+    }
+
+    room_data = []
+    for r in rooms:
+        assignments = RoomTenant.query.filter_by(room_id=r.id, is_active=True).all()
+        paid_cnt = sum(1 for a in assignments if a.payment_status == "paid")
+        room_data.append({
+            "room": r, "assignments": assignments,
+            "occupancy": len(assignments),
+            "vacant": max(0, r.max_capacity - len(assignments)),
+            "paid_count": paid_cnt,
+        })
+
+    target_month = request.args.get("month", fmt_month())
+    pay_summary = _payment_svc.owner_summary(current_user.id, target_month, property_id=property_id)
+
+    recent_payments = Payment.query.filter_by(property_id=property_id).order_by(Payment.created_at.desc()).limit(10).all()
+
+    return render_template("owner/dashboard.html",
+                           stats=stats, recent_payments=recent_payments,
+                           props=[prop], room_data=room_data,
+                           pay_summary=pay_summary, target_month=target_month,
+                           current_property=prop)
+
+
+@owner_bp.route("/property-selection")
+@login_required
+@role_required("owner")
+def property_selection():
+    mark_overdue_payments()
+
+    props = Property.query.filter_by(owner_id=current_user.id, is_deleted=False).all()
+    p_ids = [p.id for p in props]
+
+    # Global stats across all properties
+    stats = {
+        "total_properties": len(props),
+        "total_tenants": User.query.filter_by(owner_id=current_user.id, role="tenant").count(),
+        "vacant_rooms": Room.query.filter_by(owner_id=current_user.id, is_active=True).count() - RoomTenant.query.filter(RoomTenant.is_active == True, RoomTenant.room_id.in_([r.id for r in Room.query.filter_by(owner_id=current_user.id, is_active=True).all()])).count(),
+        "monthly_revenue": float(
             db.session.query(db.func.coalesce(db.func.sum(Payment.amount), 0))
             .filter(Payment.property_id.in_(p_ids), Payment.status == "completed")
             .scalar() or 0
@@ -58,38 +111,41 @@ def dashboard():
         "pending_payments": Payment.query.filter(
             Payment.property_id.in_(p_ids), Payment.status == "pending"
         ).count() if p_ids else 0,
-        "overdue_payments": Payment.query.filter(
-            Payment.property_id.in_(p_ids), Payment.status == "overdue"
-        ).count() if p_ids else 0,
+        "maintenance_issues": 0,  # Placeholder, can add later
     }
 
-    room_data = []
-    for r in rooms:
-        from models import RoomTenant as RT
-        assignments = RT.query.filter_by(room_id=r.id, is_active=True).all()
-        paid_cnt    = sum(1 for a in assignments if a.payment_status == "paid")
-        room_data.append({
-            "room": r, "assignments": assignments,
-            "occupancy": len(assignments),
-            "vacant":    max(0, r.max_capacity - len(assignments)),
-            "paid_count": paid_cnt,
+    # Property list with summaries
+    property_data = []
+    for prop in props:
+        tenant_count = PropertyTenant.query.filter_by(property_id=prop.id, status="active").count()
+        rooms = Room.query.filter_by(property_id=prop.id, is_active=True).all()
+        vacant_rooms = len(rooms) - RoomTenant.query.filter(RoomTenant.is_active == True, RoomTenant.room_id.in_([r.id for r in rooms])).count()
+        revenue_this_month = float(
+            db.session.query(db.func.coalesce(db.func.sum(Payment.amount), 0))
+            .filter(Payment.property_id == prop.id, Payment.status == "completed", Payment.rent_month == fmt_month())
+            .scalar() or 0
+        )
+        pending_dues = Payment.query.filter_by(property_id=prop.id, status="pending").count()
+
+        # Status indicator
+        if pending_dues > 0:
+            status = "attention"
+        elif vacant_rooms == 0:
+            status = "critical"
+        else:
+            status = "healthy"
+
+        property_data.append({
+            "property": prop,
+            "tenant_count": tenant_count,
+            "vacant_rooms": vacant_rooms,
+            "revenue_this_month": revenue_this_month,
+            "pending_dues": pending_dues,
+            "status": status,
         })
 
-    target_month = request.args.get("month", fmt_month())
-    pay_summary  = _payment_svc.owner_summary(current_user.id, target_month)
-
-    recent_payments = (
-        Payment.query.filter(Payment.property_id.in_(p_ids))
-        .order_by(Payment.created_at.desc()).limit(10).all()
-    ) if p_ids else []
-
-    return render_template("owner/dashboard.html",
-                           stats=stats, recent_payments=recent_payments,
-                           props=props, room_data=room_data,
-                           pay_summary=pay_summary, target_month=target_month)
-
-
-@owner_bp.route("/generate-rent", methods=["POST"])
+    from datetime import datetime
+    return render_template("owner/property_selection.html", stats=stats, property_data=property_data, now=datetime.now())
 @login_required
 @role_required("owner")
 def generate_rent():
@@ -127,7 +183,7 @@ def add_property():
         rent    = require_amount(request.form.get("monthly_rent"), "monthly_rent")
     except ValidationError as e:
         flash(str(e), "error")
-        return redirect(url_for("owner.properties"))
+        return redirect(url_for('owner.property_selection'))
 
     prop = Property(
         owner_id=current_user.id,

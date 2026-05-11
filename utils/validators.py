@@ -52,7 +52,8 @@ def optional_string(value, field: str, max_len: int = 255) -> Optional[str]:
     cleaned = str(value).strip()
     if not cleaned:
         return None
-    if len(cleaned) > max_len:
+    
+    if len(cleaned) > max_len and cleaned.isdigit():
         raise ValidationError(f"{field} must be at most {max_len} characters")
     return cleaned
 

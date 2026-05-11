@@ -1,11 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Owner Dashboard — PropFlow{% endblock %}
-{% block page_title %}Dashboard{% endblock %}
+{% block title %}{% if current_property %}{{ current_property.name }} Dashboard{% else %}Owner Dashboard{% endif %} — PropFlow{% endblock %}
+{% block page_title %}{% if current_property %}{{ current_property.name }} Dashboard{% else %}Dashboard{% endif %}{% endblock %}
 
 {% block content %}
+{% if current_property %}
+<div class="property-header">
+  <div class="property-info">
+    <h1>{{ current_property.name }}</h1>
+    <p>{{ current_property.address }}, {{ current_property.city }}, {{ current_property.state }}</p>
+  </div>
+  <div class="property-actions">
+    <a href="{{ url_for('owner.properties') }}" class="btn btn-ghost">← Back to Properties</a>
+    <a href="{{ url_for('owner.edit_property', pid=current_property.id) }}" class="btn btn-primary">Edit Property</a>
+  </div>
+</div>
+<style>
+.property-header {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.property-info h1 { margin: 0; color: #333; }
+.property-info p { margin: 5px 0 0 0; color: #666; }
+.property-actions { display: flex; gap: 10px; }
+</style>
+{% endif %}
+
 <!-- Stats -->
 <div class="stats-grid">
+  {% if not current_property %}
   <div class="stat-card"><div class="stat-icon" style="background:var(--c-blue-bg);color:var(--c-blue)">🏠</div><div class="stat-body"><div class="stat-value">{{ stats.total_properties }}</div><div class="stat-label">Properties</div></div></div>
+  {% endif %}
   <div class="stat-card"><div class="stat-icon" style="background:var(--c-green-bg);color:var(--c-green)">👤</div><div class="stat-body"><div class="stat-value">{{ stats.total_tenants }}</div><div class="stat-label">Tenants</div></div></div>
   <div class="stat-card"><div class="stat-icon" style="background:var(--c-purple-bg);color:var(--c-purple)">🚪</div><div class="stat-body"><div class="stat-value">{{ stats.total_rooms }}</div><div class="stat-label">Rooms</div></div></div>
   <div class="stat-card"><div class="stat-icon" style="background:var(--c-yellow-bg);color:var(--c-yellow)">⏳</div><div class="stat-body"><div class="stat-value">{{ stats.pending_payments }}</div><div class="stat-label">Pending</div></div></div>
@@ -15,9 +45,15 @@
 
 <!-- Quick actions -->
 <div class="quick-actions">
+  {% if current_property %}
+  <a href="{{ url_for('owner.tenants', property_id=current_property.id) }}"  class="qa-btn"><span>👤</span>Add Tenant</a>
+  <a href="{{ url_for('owner.payments', property_id=current_property.id) }}" class="qa-btn"><span>💳</span>Payments</a>
+  <a href="{{ url_for('rooms.index', property_id=current_property.id) }}"    class="qa-btn"><span>🚪</span>Rooms</a>
+  {% else %}
   <a href="{{ url_for('owner.tenants') }}"  class="qa-btn"><span>👤</span>Add Tenant</a>
   <a href="{{ url_for('owner.payments') }}" class="qa-btn"><span>💳</span>Payments</a>
   <a href="{{ url_for('rooms.index') }}"    class="qa-btn"><span>🚪</span>Rooms</a>
+  {% endif %}
   <a href="{{ url_for('chat.index') }}"     class="qa-btn"><span>💬</span>Message</a>
   <button onclick="openModal('genRentModal')" class="qa-btn qa-btn-accent"><span>⚡</span>Gen Rent</button>
 </div>
@@ -146,7 +182,7 @@
 <div id="genRentModal" class="modal-backdrop hidden">
   <div class="modal" style="max-width:380px">
     <div class="modal-header"><h3>⚡ Generate Monthly Rent</h3><button onclick="closeModal('genRentModal')">✕</button></div>
-    <form method="POST" action="{{ url_for('owner.generate_rent') }}">
+    <form method="POST" action="{{ url_for('admin.generate_rent') }}">
       <div class="modal-body">
         <div class="form-group">
           <label class="form-label">Month</label>

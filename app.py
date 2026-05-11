@@ -103,7 +103,9 @@ def create_app(config_class=Config):
     @app.errorhandler(Exception)
     def handle_unhandled(exc):
         db.session.rollback()
-        log.exception(f"Unhandled exception: {type(exc).__name__}: {exc}")
+        log.exception(f"Unhandled exception: {exc}")
+        if app.config["DEBUG"]:
+            raise exc  # in debug mode, let it crash for easier debugging
         return jsonify({"ok": False, "code": "INTERNAL_ERROR",
                         "error": "An unexpected error occurred."}), 500
 

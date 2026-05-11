@@ -336,17 +336,21 @@ class PaymentService(BaseService):
         )
 
     # ── Owner monthly summary ──────────────────────────────────────────────────
-    def owner_summary(self, owner_id: int, target_month: str = None) -> list:
+    def owner_summary(self, owner_id: int, target_month: str = None, property_id: int = None) -> list:
         """
         Return per-tenant paid/unpaid summary for a given month.
+        If property_id is provided, filter to that property only.
         Uses a single JOIN query — no N+1.
         """
         month = target_month or fmt_month()
 
-        prop_ids = [
-            p.id for p in
-            Property.query.filter_by(owner_id=owner_id, is_deleted=False).all()
-        ]
+        if property_id:
+            prop_ids = [property_id]
+        else:
+            prop_ids = [
+                p.id for p in
+                Property.query.filter_by(owner_id=owner_id, is_deleted=False).all()
+            ]
         if not prop_ids:
             return []
 

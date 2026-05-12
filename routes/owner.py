@@ -145,7 +145,14 @@ def property_selection():
         })
 
     from datetime import datetime
-    return render_template("owner/property_selection.html", stats=stats, property_data=property_data, now=datetime.now())
+    return render_template(
+        "owner/property_selection.html",
+        stats=stats,
+        property_data=property_data,
+        now=datetime.now(),
+        show_sidebar=False,
+    )
+@owner_bp.route("/generate-rent", methods=["POST"])
 @login_required
 @role_required("owner")
 def generate_rent():

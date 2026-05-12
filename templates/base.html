@@ -8,7 +8,9 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+{% set show_sidebar = show_sidebar|default(true) %}
 
+{% if show_sidebar %}
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
 <aside class="sidebar" id="sidebar">
@@ -62,10 +64,13 @@
     <a href="{{ url_for('auth.logout') }}" class="logout-btn" title="Logout">⏻</a>
   </div>
 </aside>
+{% endif %}
 
-<div class="main-wrap">
+<div class="main-wrap {% if not show_sidebar %}no-sidebar{% endif %}">
   <header class="topbar">
+    {% if show_sidebar %}
     <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+    {% endif %}
     <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
     <div class="topbar-right">
       <button class="icon-btn" id="darkToggle" onclick="toggleDark()" title="Dark mode" aria-label="Toggle dark mode">🌙</button>

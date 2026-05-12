@@ -3,20 +3,27 @@
 {% block page_title %}Messages{% endblock %}
 
 {% block content %}
+{% if chat_blocked %}
+<div class="flash flash-warning" style="margin-bottom:12px">
+  Complete verification (address, photo, and ID proof) to use messaging and property chat.
+</div>
+{% endif %}
+
 <div class="chat-layout">
 
-  <!-- Conversation sidebar -->
-  <div class="chat-sidebar {% if selected_user %}chat-sidebar-hidden-mobile{% endif %}">
+  <div class="chat-sidebar {% if selected_user or selected_room %}chat-sidebar-hidden-mobile{% endif %}">
     <div class="chat-sidebar-head">
-      <span class="font-semibold">💬 Conversations</span>
+      <span class="font-semibold">💬 Direct</span>
       <input type="text" id="convSearch" placeholder="Search…" class="form-input"
              style="padding:6px 10px;font-size:13px;margin-top:8px"
              oninput="filterConvs(this.value)"/>
     </div>
     <div class="conv-list" id="convList">
       {% for c in conversations %}
+      {% if c.user.role != "admin" %}
+    
       <a href="{{ url_for('chat.index', **{'with': c.user.id}) }}"
-         class="conv-item {% if selected_user and selected_user.id == c.user.id %}conv-active{% endif %}"
+         class="conv-item {% if selected_user and selected_user.id == c.user.id and not selected_room %}conv-active{% endif %}"
          data-name="{{ c.user.full_name|lower }}">
         <div class="conv-avatar" style="background:{{ loop.cycle('var(--c-blue-bg)','var(--c-green-bg)','var(--c-yellow-bg)','var(--c-purple-bg)') }}">
           {{ c.user.full_name[0].upper() }}
@@ -24,6 +31,7 @@
         <div class="conv-info">
           <div class="conv-name">
             {{ c.user.full_name }}
+            {% if c.user.tenant_public_id %}<span class="text-muted font-mono" style="font-size:10px">{{ c.user.tenant_public_id }}</span>{% endif %}
             {% if c.unread %}<span class="unread-dot">{{ c.unread }}</span>{% endif %}
           </div>
           <div class="conv-last text-muted">
@@ -43,16 +51,125 @@
           {% endif %}
         </div>
       </a>
+      {% endif %}
       {% else %}
-      <div class="conv-empty text-muted">No conversations yet.</div>
+      <div class="conv-empty text-muted">No direct chats yet.</div>
       {% endfor %}
     </div>
+<!-- ROOM CHAT CONVESATIONS LIST -->
+    {% if room_conversations|length %}
+    <div class="chat-sidebar-head" style="margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">
+      <span class="font-semibold">🏠 Room chat</span>
+      <span class="text-muted" style="font-size:11px;display:block;margin-top:4px">Verified tenants & owner</span>
+    </div>
+    
+    <div class="conv-list">
+      {% for rc in room_conversations %}
+      <a href="{{ url_for('chat.index', room=rc.room.id) }}"
+         class="conv-item {% if selected_room and selected_room.id == rc.room.id %}conv-active{% endif %}"
+         data-name="{{ rc.label|lower }}">
+        <div class="conv-avatar" style="background:var(--c-purple-bg);color:var(--c-purple)">🏠</div>
+        <div class="conv-info">
+          <div class="conv-name">{{ rc.label }}</div>
+          <div class="conv-last text-muted">
+            {% if rc.last %}
+              {% if rc.last.file_type == 'image' %}📷 Photo
+              {% elif rc.last.file_type == 'video' %}🎥 Video
+              {% elif rc.last.file_type == 'audio' %}🎤 Voice
+              {% elif rc.last.file_type == 'file' %}📎 {{ rc.last.file_name or 'File' }}
+              {% else %}{{ (rc.last.content or '')[:36] }}{% endif %}
+            {% else %}<em>No messages yet</em>{% endif %}
+          </div>
+        </div>
+        {% if rc.last %}
+        <div class="conv-meta">
+          <div class="conv-time text-muted" data-created-at="{{ rc.last_created_at }}"><span class="conv-time-display"></span></div>
+        </div>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 
-  <!-- Message pane -->
-  <div class="chat-main {% if not selected_user %}chat-main-hidden-mobile{% endif %}">
-    {% if selected_user %}
-    <!-- Header -->
+  <div class="chat-main {% if not selected_user and not selected_room %}chat-main-hidden-mobile{% endif %}">
+    {% if selected_room %}
+    <div class="chat-head">
+      <a href="{{ url_for('chat.index') }}" class="chat-back-btn">←</a>
+      <div class="conv-avatar" style="background:var(--c-purple-bg);color:var(--c-purple)">🏠</div>
+      <div class="flex-1">
+        <div class="font-semibold">Room {{ selected_room.room_number }}</div>
+        <div class="text-muted" style="font-size:12px">
+          {% if selected_room.prop %}{{ selected_room.prop.name }}{% endif %}
+          · {{ selected_room.get_occupancy() }}/{{ selected_room.max_capacity }} occupants
+        </div>
+      </div>
+    </div>
+
+    <div class="msg-area" id="msgArea">
+      {% if messages_room|length >= page_size %}
+      <div class="text-center" style="padding:8px">
+        <button class="btn btn-ghost btn-xs" id="loadMoreBtnRm"
+                onclick="loadOlderRoom()">Load older messages</button>
+      </div>
+      {% endif %}
+
+      {% for m in messages_room %}
+      {% if not m.is_deleted %}
+      <div class="msg-row {% if m.sender_id == current_user.id %}msg-mine{% else %}msg-theirs{% endif %}"
+           data-mid="{{ m.id }}">
+        <div class="msg-bubble">
+          {% if m.sender_id != current_user.id %}
+          <div class="msg-sender-hint text-muted" style="font-size:11px;margin-bottom:4px">
+            {{ m.sender.full_name if m.sender else '?' }}
+            {% if m.sender and m.sender.tenant_public_id %}· <span class="font-mono">{{ m.sender.tenant_public_id }}</span>{% endif %}
+          </div>
+          {% endif %}
+          {% if m.file_type == 'image' %}
+            <a href="{{ m.file_url }}" target="_blank">
+              <img src="{{ m.file_url }}" class="msg-img" loading="lazy"/></a>
+          {% elif m.file_type == 'video' %}
+            <video src="{{ m.file_url }}" controls class="msg-video"></video>
+          {% elif m.file_type == 'audio' %}
+            <audio src="{{ m.file_url }}" controls class="msg-audio"></audio>
+          {% elif m.file_url %}
+            <a href="{{ m.file_url }}" target="_blank" class="msg-file-link" download="{{ m.file_name }}">
+              📎 {{ m.file_name or 'Download file' }}</a>
+          {% endif %}
+          {% if m.content %}<div class="msg-text">{{ m.content }}</div>{% endif %}
+          <div class="msg-meta" data-created-at="{{ m.created_at.isoformat() + 'Z' if m.created_at else '' }}">
+            <span class="msg-time-display"></span>
+            {% if m.sender_id == current_user.id %}
+            · <button class="msg-del-btn" onclick="deleteMsg({{ m.id }}, this)" title="Delete">🗑</button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+      <div id="msgEnd"></div>
+    </div>
+
+    {% if not chat_blocked %}
+    <div class="chat-input-wrap">
+      <form id="msgFormRm" class="chat-form" enctype="multipart/form-data">
+        <div id="filePreviewRm" class="file-preview hidden"></div>
+        <div class="chat-input-row">
+          <label class="file-btn" title="Attach">
+            📎
+            <input type="file" id="fileInputRm" name="file" style="display:none"
+                   onchange="previewFileRm(this)"
+                   accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"/>
+          </label>
+          <input type="text" name="content" id="msgInputRm"
+                 class="chat-input" placeholder="Message your room…" autocomplete="off"/>
+          <button type="submit" class="chat-send-btn" id="sendBtnRm">Send</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
+    {% elif selected_user %}
     <div class="chat-head">
       <a href="{{ url_for('chat.index') }}" class="chat-back-btn">←</a>
       <div class="conv-avatar" style="background:var(--c-blue-bg);color:var(--c-blue)">
@@ -61,12 +178,14 @@
       <div class="flex-1">
         <div class="font-semibold">{{ selected_user.full_name }}</div>
         <div id="statusLine" class="text-muted" style="font-size:12px">
+          {% if selected_user.tenant_public_id %}
+          <span class="font-mono" style="font-size:11px">{{ selected_user.tenant_public_id }}</span> ·
+          {% endif %}
           <span class="role-badge role-{{ selected_user.role }}">{{ selected_user.role }}</span>
         </div>
       </div>
     </div>
 
-    <!-- Messages -->
     <div class="msg-area" id="msgArea">
       {% if messages|length >= page_size %}
       <div class="text-center" style="padding:8px">
@@ -82,8 +201,7 @@
         <div class="msg-bubble">
           {% if m.file_type == 'image' %}
             <a href="{{ m.file_url }}" target="_blank">
-              <img src="{{ m.file_url }}" class="msg-img" loading="lazy"/>
-            </a>
+              <img src="{{ m.file_url }}" class="msg-img" loading="lazy"/></a>
           {% elif m.file_type == 'video' %}
             <video src="{{ m.file_url }}" controls class="msg-video"></video>
           {% elif m.file_type == 'audio' %}
@@ -95,9 +213,7 @@
               {% if m.file_size %}<span style="font-size:10px;opacity:.7;margin-left:4px">({{ (m.file_size / 1024)|int }} KB)</span>{% endif %}
             </a>
           {% endif %}
-          {% if m.content %}
-          <div class="msg-text">{{ m.content }}</div>
-          {% endif %}
+          {% if m.content %}<div class="msg-text">{{ m.content }}</div>{% endif %}
           <div class="msg-meta" data-created-at="{{ m.created_at.isoformat() + 'Z' if m.created_at else '' }}">
             <span class="msg-time-display"></span>
             {% if m.sender_id == current_user.id %}
@@ -114,18 +230,17 @@
       <div id="msgEnd"></div>
     </div>
 
-    <!-- Typing indicator -->
     <div id="typingBar" class="chat-typing hidden">
       <span id="typingText"></span>
     </div>
 
-    <!-- Input -->
+    {% if not chat_blocked %}
     <div class="chat-input-wrap">
       <form id="msgForm" class="chat-form" enctype="multipart/form-data">
         <input type="hidden" name="receiver_id" value="{{ selected_user.id }}"/>
         <div id="filePreview" class="file-preview hidden"></div>
         <div class="chat-input-row">
-          <label class="file-btn" title="Attach: image, video, audio, document">
+          <label class="file-btn" title="Attach">
             📎
             <input type="file" id="fileInput" name="file" style="display:none"
                    onchange="previewFile(this)"
@@ -137,11 +252,12 @@
         </div>
       </form>
     </div>
+    {% endif %}
 
     {% else %}
     <div class="chat-empty">
       <div class="empty-icon">💬</div>
-      <p>Select a conversation</p>
+      <p>Select a conversation or room</p>
     </div>
     {% endif %}
   </div>
@@ -150,59 +266,53 @@
 
 {% block scripts %}
 <script>
-// Helper: Convert UTC timestamp to IST string using JavaScript
 function toIST(isoOrTs) {
   if (!isoOrTs) return '';
   try {
     const date = new Date(isoOrTs);
-    return date.toLocaleString('en-IN', { 
+    return date.toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
-      hour: '2-digit', 
+      hour: '2-digit',
       minute: '2-digit',
-      hour12: true 
+      hour12: true
     });
   } catch (e) { return ''; }
 }
 
 const RECEIVER_ID = {{ selected_user.id if selected_user else 'null' }};
+const ROOM_ID = {{ selected_room.id if selected_room else 'null' }};
+const ROOM_KEY_PREFIX = ROOM_ID ? ('rgrp_' + ROOM_ID) : null;
 const CURRENT_ID  = {{ current_user.id }};
 const PAGE_SIZE   = {{ page_size }};
+const CHAT_BLOCKED = {{ chat_blocked|tojson }};
 let   lastTs      = 0;
 let   oldestId    = null;
-let   isOnline    = false;
 
-// Convert all timestamps on page load
 document.querySelectorAll('.msg-meta[data-created-at]').forEach(el => {
   const ts = el.dataset.createdAt;
   const timeSpan = el.querySelector('.msg-time-display');
   if (timeSpan && ts) timeSpan.textContent = toIST(ts);
 });
-
-// Convert conversation list timestamps
 document.querySelectorAll('.conv-time[data-created-at]').forEach(el => {
   const ts = el.dataset.createdAt;
   const timeSpan = el.querySelector('.conv-time-display');
   if (timeSpan && ts) timeSpan.textContent = toIST(ts);
 });
 
-// ── Scroll ──────────────────────────────────────────────────
 function scrollBottom(smooth) {
   const el = document.getElementById('msgEnd');
   if (el) el.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' });
 }
 scrollBottom(false);
 
-// Record oldest message id for pagination
 (function() {
   const rows = document.querySelectorAll('.msg-row[data-mid]');
-  if (rows.length) {
-    oldestId = parseInt(rows[0].dataset.mid);
-    lastTs   = 0;  // will be updated by poll/socket
-  }
+  if (rows.length) oldestId = parseInt(rows[0].dataset.mid);
 })();
 
-// ── Render one message ───────────────────────────────────────
-function renderMsg(m) {
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderMsg(m, isRoom) {
   if (document.querySelector(`[data-mid="${m.id}"]`)) return null;
   const isMine = m.sender_id === CURRENT_ID;
   const wrap   = document.createElement('div');
@@ -219,103 +329,97 @@ function renderMsg(m) {
   else if (m.file_url)
     media = `<a href="${m.file_url}" target="_blank" class="msg-file-link" download="${m.file_name||''}">📎 ${esc(m.file_name||'Download')}</a>`;
 
-  const ticks = isMine
-    ? `<span class="msg-ticks ${m.is_read ? 'ticks-read':'ticks-sent'}">${m.is_read?'✓✓':'✓'}</span>`
+  const hint = (isRoom && !isMine && m.sender_name)
+    ? `<div class="msg-sender-hint text-muted" style="font-size:11px;margin-bottom:4px">${esc(m.sender_name)}${m.sender_tenant_code ? ` · <span class="font-mono">${esc(m.sender_tenant_code)}</span>` : ''}</div>`
     : '';
+
+  const ticks = (!isRoom && isMine)
+    ? `<span class="msg-ticks ${m.is_read ? 'ticks-read':'ticks-sent'}">${m.is_read?'✓✓':'✓'}</span>` : '';
   const del = isMine
     ? `· <button class="msg-del-btn" onclick="deleteMsg(${m.id},this)">🗑</button>` : '';
 
-  // Convert UTC to IST using JavaScript
   const timeStr = toIST(m.created_at);
 
-  wrap.innerHTML = `<div class="msg-bubble">
-    ${media}
-    ${m.content ? `<div class="msg-text">${esc(m.content)}</div>` : ''}
-    <div class="msg-meta">${timeStr} ${ticks} ${del}</div>
-  </div>`;
+  wrap.innerHTML = `<div class="msg-bubble">${hint}${media}${m.content ? `<div class="msg-text">${esc(m.content)}</div>` : ''}
+    <div class="msg-meta">${timeStr} ${ticks} ${del}</div></div>`;
   return wrap;
 }
 
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-// ── SocketIO events ──────────────────────────────────────────
-if (RECEIVER_ID) {
-  // Join chat room immediately
+if (RECEIVER_ID && !CHAT_BLOCKED) {
   socket.emit('join_chat', { other_id: RECEIVER_ID });
-  
-  // Rejoin on reconnect
-  socket.on('reconnect', () => {
-    socket.emit('join_chat', { other_id: RECEIVER_ID });
-  });
-
-  socket.on('new_message', (m) => {
-    // Check if we already rendered this message
-    if (document.querySelector(`[data-mid="${m.id}"]`)) return;
-    
-    const area = document.getElementById('msgArea');
-    const end  = document.getElementById('msgEnd');
-    if (!area) return;
-    
-    // Render the message
-    const node = renderMsg(m);
-    if (node) {
-      if (end) area.insertBefore(node, end); else area.appendChild(node);
-      lastTs = Math.max(lastTs, m.created_ts || 0);
-      
-      // ALWAYS scroll to bottom for both sender and receiver
-      scrollBottom(true);
-      
-      // Auto-mark as read if tab is visible
-      if (document.visibilityState === 'visible') {
-        socket.emit('mark_read', { room_id: m.room_id });
-      }
-    }
-  });
-
-  socket.on('message_deleted', (d) => {
-    const el = document.querySelector(`[data-mid="${d.id}"]`);
-    if (el) {
-      el.querySelector('.msg-bubble').innerHTML =
-        '<div class="msg-text" style="opacity:.5;font-style:italic">Message deleted</div>';
-    }
-  });
-
-  socket.on('message_edited', (m) => {
-    const el = document.querySelector(`[data-mid="${m.id}"] .msg-text`);
-    if (el) el.textContent = m.content;
-  });
-
-  socket.on('user_online', (d) => {
-    if (d.user_id === RECEIVER_ID) {
-      isOnline = true;
-      const sl = document.getElementById('statusLine');
-      if (sl) sl.innerHTML = '<span class="online-badge">Online</span>';
-    }
-  });
-
-  socket.on('read_receipt', (d) => {
-    // Update double-tick to blue for all sent messages
-    document.querySelectorAll('.msg-mine .msg-ticks').forEach(el => {
-      el.className = 'msg-ticks ticks-read';
-      el.textContent = '✓✓';
-    });
-  });
-
-  socket.on('typing', (d) => {
-    if (d.user_id !== RECEIVER_ID) return;
-    const bar  = document.getElementById('typingBar');
-    const txt  = document.getElementById('typingText');
-    if (!bar || !txt) return;
-    txt.textContent = `${d.name} is typing…`;
-    bar.classList.remove('hidden');
-    clearTimeout(window._typingTimer);
-    window._typingTimer = setTimeout(() => bar.classList.add('hidden'), 3000);
-  });
+  socket.on('reconnect', () => socket.emit('join_chat', { other_id: RECEIVER_ID }));
 }
 
-// ── Send ─────────────────────────────────────────────────────
+if (ROOM_ID && !CHAT_BLOCKED) {
+  socket.emit('join_room_chat', { room_id: ROOM_ID });
+  socket.on('reconnect', () => socket.emit('join_room_chat', { room_id: ROOM_ID }));
+}
+
+socket.on('new_message', (m) => {
+  if (ROOM_KEY_PREFIX) {
+    if (!m.room_id || m.room_id !== ROOM_KEY_PREFIX) return;
+  } else if (RECEIVER_ID) {
+    const dm = `dm_${Math.min(CURRENT_ID, RECEIVER_ID)}_${Math.max(CURRENT_ID, RECEIVER_ID)}`;
+    if (m.room_id !== dm) return;
+  } else {
+    return;
+  }
+  if (document.querySelector(`[data-mid="${m.id}"]`)) return;
+  const area = document.getElementById('msgArea');
+  const end  = document.getElementById('msgEnd');
+  if (!area) return;
+  const node = renderMsg(m, !!ROOM_ID);
+  if (node) {
+    if (end) area.insertBefore(node, end); else area.appendChild(node);
+    lastTs = Math.max(lastTs, m.created_ts || 0);
+    scrollBottom(true);
+    if (RECEIVER_ID && document.visibilityState === 'visible' && m.room_id && m.room_id.startsWith('dm_')) {
+      socket.emit('mark_read', { room_id: m.room_id });
+    }
+  }
+});
+
+socket.on('message_deleted', (d) => {
+  const el = document.querySelector(`[data-mid="${d.id}"]`);
+  if (el) {
+    el.querySelector('.msg-bubble').innerHTML =
+      '<div class="msg-text" style="opacity:.5;font-style:italic">Message deleted</div>';
+  }
+});
+
+socket.on('message_edited', (m) => {
+  const el = document.querySelector(`[data-mid="${m.id}"] .msg-text`);
+  if (el) el.textContent = m.content;
+});
+
+socket.on('user_online', (d) => {
+  if (RECEIVER_ID && d.user_id === RECEIVER_ID) {
+    const sl = document.getElementById('statusLine');
+    if (sl) sl.innerHTML = '<span class="online-badge">Online</span>';
+  }
+});
+
+socket.on('read_receipt', () => {
+  document.querySelectorAll('.msg-mine .msg-ticks').forEach(el => {
+    el.className = 'msg-ticks ticks-read';
+    el.textContent = '✓✓';
+  });
+});
+
+socket.on('typing', (d) => {
+  if (!RECEIVER_ID || d.user_id !== RECEIVER_ID) return;
+  const bar  = document.getElementById('typingBar');
+  const txt  = document.getElementById('typingText');
+  if (!bar || !txt) return;
+  txt.textContent = `${d.name} is typing…`;
+  bar.classList.remove('hidden');
+  clearTimeout(window._typingTimer);
+  window._typingTimer = setTimeout(() => bar.classList.add('hidden'), 3000);
+});
+
 document.getElementById('msgForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (CHAT_BLOCKED) return;
   const btn   = document.getElementById('sendBtn');
   const input = document.getElementById('msgInput');
   const file  = document.getElementById('fileInput');
@@ -326,14 +430,12 @@ document.getElementById('msgForm')?.addEventListener('submit', async (e) => {
     const res  = await fetch('/chat/send', { method: 'POST', body: fd, credentials: 'same-origin' });
     const data = await res.json();
     if (!data.ok) { alert(data.error || 'Failed'); return; }
-    
-    // Render message immediately on sender's side
     const msgData = data.data;
     if (msgData) {
       const area = document.getElementById('msgArea');
       const end  = document.getElementById('msgEnd');
       if (area) {
-        const node = renderMsg(msgData);
+        const node = renderMsg(msgData, false);
         if (node) {
           if (end) area.insertBefore(node, end); else area.appendChild(node);
           lastTs = Math.max(lastTs, msgData.created_ts || 0);
@@ -341,17 +443,47 @@ document.getElementById('msgForm')?.addEventListener('submit', async (e) => {
         }
       }
     }
-    
     input.value = '';
     if (file) file.value = '';
     const prev = document.getElementById('filePreview');
     if (prev) { prev.classList.add('hidden'); prev.innerHTML = ''; }
-    
   } catch(ex) { alert('Network error'); }
   finally { btn.disabled = false; btn.textContent = 'Send'; input.focus(); }
 });
 
-// ── Typing emit ───────────────────────────────────────────────
+document.getElementById('msgFormRm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (CHAT_BLOCKED || !ROOM_ID) return;
+  const btn   = document.getElementById('sendBtnRm');
+  const input = document.getElementById('msgInputRm');
+  const file  = document.getElementById('fileInputRm');
+  if (!input.value.trim() && !file.files.length) return;
+  btn.disabled = true; btn.textContent = '…';
+  const fd = new FormData(e.target);
+  try {
+    const res = await fetch(`/chat/room/${ROOM_ID}/send`, { method: 'POST', body: fd, credentials: 'same-origin' });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error || 'Failed'); return; }
+    const msgData = data.data;
+    if (msgData) {
+      const area = document.getElementById('msgArea');
+      const end  = document.getElementById('msgEnd');
+      if (area) {
+        const node = renderMsg(msgData, true);
+        if (node) {
+          if (end) area.insertBefore(node, end); else area.appendChild(node);
+          scrollBottom(true);
+        }
+      }
+    }
+    input.value = '';
+    if (file) file.value = '';
+    const prev = document.getElementById('filePreviewRm');
+    if (prev) { prev.classList.add('hidden'); prev.innerHTML = ''; }
+  } catch(ex) { alert('Network error'); }
+  finally { btn.disabled = false; btn.textContent = 'Send'; input.focus(); }
+});
+
 let _te = false;
 document.getElementById('msgInput')?.addEventListener('input', () => {
   if (!_te && RECEIVER_ID) {
@@ -361,15 +493,20 @@ document.getElementById('msgInput')?.addEventListener('input', () => {
   }
 });
 
-// Enter to send
 document.getElementById('msgInput')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    document.getElementById('msgForm').dispatchEvent(new Event('submit'));
+    document.getElementById('msgForm')?.dispatchEvent(new Event('submit'));
   }
 });
 
-// ── Delete ───────────────────────────────────────────────────
+document.getElementById('msgInputRm')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('msgFormRm')?.dispatchEvent(new Event('submit'));
+  }
+});
+
 async function deleteMsg(mid, btn) {
   if (!confirm('Delete this message?')) return;
   const res = await fetch(`/chat/delete/${mid}`, { method:'POST', body: new FormData(), credentials: 'same-origin' });
@@ -377,7 +514,6 @@ async function deleteMsg(mid, btn) {
   if (!d.ok) alert(d.error || 'Failed');
 }
 
-// ── Load older messages (pagination) ─────────────────────────
 async function loadOlderMessages() {
   if (!RECEIVER_ID || !oldestId) return;
   const btn = document.getElementById('loadMoreBtn');
@@ -392,7 +528,7 @@ async function loadOlderMessages() {
     const area = document.getElementById('msgArea');
     const first = area.querySelector('.msg-row');
     msgs.forEach(m => {
-      const node = renderMsg(m);
+      const node = renderMsg(m, false);
       if (node) {
         if (first) area.insertBefore(node, first); else area.prepend(node);
       }
@@ -404,7 +540,32 @@ async function loadOlderMessages() {
   }
 }
 
-// ── File preview ─────────────────────────────────────────────
+async function loadOlderRoom() {
+  if (!ROOM_ID || !oldestId) return;
+  const btn = document.getElementById('loadMoreBtnRm');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  try {
+    const res = await fetch(`/chat/room/${ROOM_ID}/older?before=${oldestId}`);
+    const msgs = await res.json();
+    if (!msgs.length) {
+      if (btn) { btn.textContent = 'No more messages'; btn.disabled = true; }
+      return;
+    }
+    const area = document.getElementById('msgArea');
+    const first = area.querySelector('.msg-row');
+    msgs.forEach(m => {
+      const node = renderMsg(m, true);
+      if (node) {
+        if (first) area.insertBefore(node, first); else area.prepend(node);
+      }
+    });
+    oldestId = msgs[0].id;
+    if (btn) { btn.disabled = false; btn.textContent = 'Load older messages'; }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+  }
+}
+
 function previewFile(input) {
   const prev = document.getElementById('filePreview');
   if (!prev) return;
@@ -428,58 +589,94 @@ function previewFile(input) {
   prev.classList.remove('hidden');
 }
 
-// ── Conversation search ───────────────────────────────────────
+function previewFileRm(input) {
+  const prev = document.getElementById('filePreviewRm');
+  if (!prev) return;
+  prev.innerHTML = '';
+  if (!input.files.length) { prev.classList.add('hidden'); return; }
+  const f = input.files[0];
+  if (f.size > 10 * 1024 * 1024) {
+    alert('File too large (max 10 MB)');
+    input.value = '';
+    return;
+  }
+  const typeIcon = f.type.startsWith('image') ? '🖼' :
+                   f.type.startsWith('video') ? '🎥' :
+                   f.type.startsWith('audio') ? '🎤' : '📎';
+  const name  = document.createElement('span');
+  name.textContent = `${typeIcon} ${f.name} (${(f.size/1024).toFixed(0)} KB)`;
+  const clear = document.createElement('button');
+  clear.type = 'button'; clear.textContent = '✕';
+  clear.onclick = () => { input.value=''; prev.classList.add('hidden'); prev.innerHTML=''; };
+  prev.appendChild(name); prev.appendChild(clear);
+  prev.classList.remove('hidden');
+}
+
 function filterConvs(q) {
   document.querySelectorAll('.conv-item').forEach(el => {
-    el.style.display = el.dataset.name.includes(q.toLowerCase()) ? '' : 'none';
+    const n = el.dataset.name || '';
+    el.style.display = n.includes(q.toLowerCase()) ? '' : 'none';
   });
 }
 
-// ── HTTP poll fallback (aggressive for real-time feel) ────────
 let pollInProgress = false;
 async function pollFallback() {
-  if (!RECEIVER_ID || pollInProgress) return;
-  pollInProgress = true;
-  try {
-    const res  = await fetch(`/chat/poll/${RECEIVER_ID}?since=${lastTs}`);
-    const msgs = await res.json();
-    const area = document.getElementById('msgArea');
-    const end  = document.getElementById('msgEnd');
-    if (!area) return;
-    msgs.forEach(m => {
-      const node = renderMsg(m);
-      if (node) {
-        if (end) area.insertBefore(node, end); else area.appendChild(node);
-        lastTs = Math.max(lastTs, m.created_ts || 0);
-        scrollBottom(true);
-      }
-    });
-  } catch(e) {}
-  finally { pollInProgress = false; }
+  if (pollInProgress) return;
+  if (RECEIVER_ID) {
+    pollInProgress = true;
+    try {
+      const res  = await fetch(`/chat/poll/${RECEIVER_ID}?since=${lastTs}`);
+      const msgs = await res.json();
+      const area = document.getElementById('msgArea');
+      const end  = document.getElementById('msgEnd');
+      if (!area) return;
+      msgs.forEach(m => {
+        const node = renderMsg(m, false);
+        if (node) {
+          if (end) area.insertBefore(node, end); else area.appendChild(node);
+          lastTs = Math.max(lastTs, m.created_ts || 0);
+          scrollBottom(true);
+        }
+      });
+    } catch(e) {}
+    finally { pollInProgress = false; }
+  } else if (ROOM_ID) {
+    pollInProgress = true;
+    try {
+      const res = await fetch(`/chat/room/${ROOM_ID}/poll?since=${lastTs}`);
+      const msgs = await res.json();
+      const area = document.getElementById('msgArea');
+      const end  = document.getElementById('msgEnd');
+      if (!area) return;
+      msgs.forEach(m => {
+        const node = renderMsg(m, true);
+        if (node) {
+          if (end) area.insertBefore(node, end); else area.appendChild(node);
+          lastTs = Math.max(lastTs, m.created_ts || 0);
+          scrollBottom(true);
+        }
+      });
+    } catch(e) {}
+    finally { pollInProgress = false; }
+  }
 }
 
-// Aggressive polling for real-time chat feel (every 500ms)
-// Runs always, not just when SocketIO is disconnected
-if (RECEIVER_ID) {
-  setInterval(pollFallback, 500);
-  
-  // Also poll immediately when window regains focus
+if (RECEIVER_ID || ROOM_ID) {
+  setInterval(pollFallback, 800);
   window.addEventListener('focus', pollFallback);
   window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      pollFallback();
-    }
+    if (document.visibilityState === 'visible') pollFallback();
   });
 }
 </script>
 
 <style>
-/* Typing bar */
 .chat-typing {
   padding: 6px 16px; font-size: 12px; color: var(--muted);
   border-top: 1px solid var(--border); background: var(--surface);
   font-style: italic; transition: all .2s;
 }
 .chat-typing.hidden { display: none; }
+.msg-sender-hint { opacity: 0.85; }
 </style>
 {% endblock %}

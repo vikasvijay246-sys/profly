@@ -11,7 +11,7 @@
 
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Name</th><th>Phone (Login)</th><th>Status</th><th>Property</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Tenant ID</th><th>Phone</th><th>Status</th><th>Property</th><th>Actions</th></tr></thead>
       <tbody>
         {% for t in tenants %}
         <tr>
@@ -30,11 +30,15 @@
               </a>
             </div>
           </td>
+          <td class="text-muted font-mono" style="font-size:11px">{{ t.tenant_public_id or '—' }}</td>
           <td class="text-muted font-mono">{{ t.phone }}</td>
           <td><span class="badge badge-{{ 'completed' if t.is_active else 'overdue' }}">{{ 'Active' if t.is_active else 'Inactive' }}</span></td>
           <td class="text-muted">
             {% set tenancy = t.tenancies.first() %}
-            {{ tenancy.property.name if tenancy and tenancy.property else '—' }}
+            {% if tenancy and tenancy.property %}
+              {{ tenancy.property.name }}
+              {% if tenancy.room_number %}<span class="text-muted" style="font-size:11px"> · R{{ tenancy.room_number }}</span>{% endif %}
+            {% else %}—{% endif %}
           </td>
           <td>
             <div class="action-btns">
@@ -46,7 +50,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-center text-muted py-32">No tenants yet. Add your first tenant below.</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-32">No tenants yet. Add your first tenant below.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -88,11 +92,29 @@
         </div>
         <div class="form-group span-2"><hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0"/></div>
         <div class="form-group span-2">
+          <label class="form-label">Designation / Occupation</label>
+          <select name="designation" class="form-input">
+            <option value="">— Select —</option>
+            <option value="student">Student</option>
+            <option value="employee">Employee</option>
+            <option value="intern">Intern</option>
+            <option value="freelancer">Freelancer</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group span-2">
           <label class="form-label">Assign to Property <span class="text-muted">(optional)</span></label>
-          <select name="property_id" class="form-input">
+          <select name="property_id" id="addTenantProperty" class="form-input" onchange="loadRoomsForAddTenant(this.value)">
             <option value="">— No property —</option>
             {% for p in properties %}<option value="{{ p.id }}">{{ p.name }} (₹{{ "%.0f"|format(p.monthly_rent) }}/mo)</option>{% endfor %}
           </select>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Room <span class="text-muted">(optional)</span></label>
+          <select name="room_id" id="addTenantRoom" class="form-input">
+            <option value="">— Select property first —</option>
+          </select>
+          <span class="form-hint" id="roomVacancyHint"></span>
         </div>
         <div class="form-group">
           <label class="form-label">Lease Start</label>
@@ -148,6 +170,35 @@
 
 {% block scripts %}
 <script>
+async function loadRoomsForAddTenant(propertyId) {
+  const roomSel = document.getElementById('addTenantRoom');
+  const hint = document.getElementById('roomVacancyHint');
+  roomSel.innerHTML = '<option value="">— No room —</option>';
+  hint.textContent = '';
+  if (!propertyId) {
+    roomSel.innerHTML = '<option value="">— Select property first —</option>';
+    return;
+  }
+  try {
+    const res = await fetch(`/owner/api/property/${propertyId}/rooms`);
+    const data = await res.json();
+    if (!data.ok || !data.rooms) return;
+    data.rooms.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      const occ = `${r.occupancy}/${r.max_capacity}`;
+      if (r.is_full) {
+        opt.disabled = true;
+        opt.textContent = `Room ${r.room_number} — No Vacancy Available (${occ})`;
+      } else {
+        opt.textContent = `Room ${r.room_number} · ${r.vacant_slots} vacant (${occ})`;
+      }
+      roomSel.appendChild(opt);
+    });
+  } catch (e) {
+    hint.textContent = 'Could not load rooms.';
+  }
+}
 function openEditTenant(t) {
   document.getElementById('et_name').value   = t.full_name||'';
   document.getElementById('et_active').value = t.is_active ? '1' : '0';

@@ -184,6 +184,7 @@ def properties():
 def add_property():
     try:
         from utils.validators import require_string, require_amount, optional_string
+        from services.tenant_id import slug_property_code
         name    = require_string(request.form.get("name"),    "name", max_len=200)
         address = require_string(request.form.get("address"), "address")
         city    = require_string(request.form.get("city"),    "city", max_len=100)
@@ -208,6 +209,8 @@ def add_property():
     )
     db.session.add(prop)
     try:
+        db.session.flush()
+        prop.short_code = slug_property_code(prop)[:16]
         db.session.commit()
         flash("Property added.", "success")
     except Exception:
@@ -267,6 +270,40 @@ def tenants():
     return render_template("owner/tenants.html", tenants=my_tenants, properties=my_props)
 
 
+@owner_bp.route("/api/property/<int:pid>/rooms")
+@login_required
+@role_required("owner")
+def api_property_rooms(pid):
+    """JSON: rooms with live occupancy for add-tenant form."""
+    prop = Property.query.filter_by(
+        id=pid, owner_id=current_user.id, is_deleted=False
+    ).first_or_404()
+    rooms = (
+        Room.query.filter_by(property_id=pid, is_active=True)
+        .order_by(Room.room_number)
+        .all()
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "property_id": prop.id,
+            "property_name": prop.name,
+            "rooms": [
+                {
+                    "id": r.id,
+                    "room_number": r.room_number,
+                    "floor": r.floor,
+                    "occupancy": r.get_occupancy(),
+                    "max_capacity": r.max_capacity,
+                    "vacant_slots": r.get_vacant_slots(),
+                    "is_full": r.get_is_full(),
+                }
+                for r in rooms
+            ],
+        }
+    )
+
+
 @owner_bp.route("/tenants/add", methods=["POST"])
 @login_required
 @role_required("owner")
@@ -317,8 +354,18 @@ def add_tenant():
             )
             db.session.commit()
 
-        # Optional property assignment
+        # Optional property + room assignment
         prop_id = optional_id(request.form.get("property_id"), "property_id")
+        room_raw = (request.form.get("room_id") or "").strip()
+        room_id = None
+        if room_raw:
+            try:
+                room_id = int(room_raw)
+            except ValueError:
+                room_id = None
+        if room_id and not prop_id:
+            flash("Select a property before choosing a room.", "error")
+            return redirect(url_for("owner.tenants"))
         if prop_id:
             ls = optional_date(request.form.get("lease_start"), "lease_start")
             le = optional_date(request.form.get("lease_end"),   "lease_end")
@@ -327,6 +374,7 @@ def add_tenant():
                 _tenant_svc.assign_to_property(
                     tenant.id, prop_id, current_user.id,
                     lease_start=ls, lease_end=le, deposit_amount=dep,
+                    room_id=room_id,
                 )
             except AppError as e:
                 flash(f"Tenant created but property assignment failed: {e}", "error")
@@ -335,13 +383,22 @@ def add_tenant():
         # Welcome notification
         try:
             from app import socketio
-            push_notification(socketio, tenant.id, "Welcome!",
-                              f"Hello {tenant.full_name}, your account is ready. Login: {tenant.phone}",
-                              "general")
+            u = User.query.get(tenant.id)
+            extra = f" ID: {u.tenant_public_id}" if u and u.tenant_public_id else ""
+            push_notification(
+                socketio, tenant.id, "Welcome!",
+                f"Hello {tenant.full_name}, your account is ready. Login: {tenant.phone}{extra}.",
+                "chat" if (u and u.tenant_public_id) else "general",
+            )
         except Exception:
             pass
 
-        flash(f"Tenant '{tenant.full_name}' created. Login: {tenant.phone}", "success")
+        db_tenant = User.query.get(tenant.id)
+        tid = db_tenant.tenant_public_id if db_tenant else None
+        msg = f"Tenant '{tenant.full_name}' created. Login: {tenant.phone}"
+        if tid:
+            msg += f" · ID: {tid}"
+        flash(msg, "success")
 
     except AppError as e:
         flash(str(e), "error")

@@ -34,6 +34,8 @@ def create_app(config_class=Config):
         logger=False, engineio_logger=False,
         ping_timeout=60, ping_interval=25,
     )
+    from routes.chat import register_socketio_events
+    register_socketio_events(socketio)
 
     # ── Flask-Login ────────────────────────────────────────────────────────────
     lm = LoginManager()
@@ -110,6 +112,11 @@ def create_app(config_class=Config):
         return jsonify({"ok": False, "code": "INTERNAL_ERROR",
                         "error": "An unexpected error occurred."}), 500
 
+    with app.app_context():
+        db.create_all()
+        from utils.schema_upgrade import upgrade_sqlite_schema
+        upgrade_sqlite_schema(db)
+
     log.info("PropFlow app created", extra={"db": app.config["SQLALCHEMY_DATABASE_URI"][:30]})
     return app
 
@@ -184,6 +191,9 @@ def seed(app):
         ]
         db.session.add_all(props)
         db.session.flush()
+        from services.tenant_id import slug_property_code
+        for _p in props:
+            _p.short_code = slug_property_code(_p)[:16]
 
         rooms = [
             Room(room_number="101", max_capacity=4, description="Ground Floor A",
@@ -220,6 +230,10 @@ def seed(app):
             RoomTenant(room_id=rooms[0].id, tenant_id=tenants[1].id, payment_status="not_paid"),
             RoomTenant(room_id=rooms[3].id, tenant_id=t4.id, payment_status="paid"),
         ])
+        from services.tenant_id import generate_tenant_public_id
+        tenants[0].tenant_public_id = generate_tenant_public_id(props[0], rooms[0])
+        tenants[1].tenant_public_id = generate_tenant_public_id(props[0], rooms[0])
+        t4.tenant_public_id = generate_tenant_public_id(props[3], rooms[3])
 
         cur_month  = fmt_month()
         prev_month = fmt_month(now - timedelta(days=32))

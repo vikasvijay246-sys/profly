@@ -35,6 +35,9 @@
     {% for p in payments %}
     <div class="payment-card {% if p.status == 'overdue' %}payment-card-overdue{% elif p.status == 'completed' %}payment-card-paid{% endif %}">
       <div class="payment-card-left">
+        {% if current_user.tenant_public_id %}
+        <div class="font-mono text-muted" style="font-size:11px;margin-bottom:4px">{{ current_user.tenant_public_id }}</div>
+        {% endif %}
         <div class="payment-month-big">{{ p.rent_month or '—' }}</div>
         <div class="text-muted" style="font-size:12px">{{ p.payment_type | capitalize }}</div>
         {% if p.due_date %}

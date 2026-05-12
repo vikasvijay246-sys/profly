@@ -10,11 +10,11 @@ SAFETY RULES enforced here:
   4. Hard-delete only allowed by admin, with explicit flag
   5. Every write goes through self.transaction()
 """
-from models import (db, User, Property, PropertyTenant,
+from models import (db, User, Property, PropertyTenant, Room,
                     Payment, RoomTenant, Notification, now_utc)
 from services.base import BaseService
 from utils.errors import (
-    ValidationError, NotFoundError, ConflictError, PermissionError_
+    ValidationError, NotFoundError, ConflictError, PermissionError_,
 )
 from utils.validators import validate_create_tenant
 
@@ -46,12 +46,15 @@ class TenantService(BaseService):
                 phone=phone,
             )
 
+        designation = data.get("designation")
+
         tenant = User(
             phone    = phone,
             full_name= full_name,
             role     = "tenant",
             owner_id = owner_id,
             address  = address,
+            designation=designation,
         )
         tenant.set_password(password)
 
@@ -74,6 +77,7 @@ class TenantService(BaseService):
         lease_start=None,
         lease_end=None,
         deposit_amount=None,
+        room_id:        int | None = None,
     ) -> PropertyTenant:
         tenant = self._get_tenant(tenant_id, owner_id)
         prop   = self._get_property(property_id, owner_id)
@@ -96,15 +100,91 @@ class TenantService(BaseService):
             deposit_amount = deposit_amount,
             status         = "active",
         )
-        with self.transaction(f"assign_tenant tenant={tenant_id} prop={property_id}"):
+        with self.transaction(
+            f"assign_tenant tenant={tenant_id} prop={property_id} room={room_id}"
+        ):
             db.session.add(pt)
+            db.session.flush()
             prop.status = "occupied"
+            if room_id:
+                self._place_tenant_in_room(
+                    tenant=tenant,
+                    prop=prop,
+                    property_tenant=pt,
+                    room_id=room_id,
+                    owner_id=owner_id,
+                )
 
         self.log.info(
             "Tenant assigned to property",
-            extra={"tenant_id": tenant_id, "property_id": property_id},
+            extra={
+                "tenant_id": tenant_id,
+                "property_id": property_id,
+                "room_id": room_id,
+            },
         )
         return pt
+
+    def _place_tenant_in_room(
+        self,
+        tenant: User,
+        prop: Property,
+        property_tenant: PropertyTenant,
+        room_id: int,
+        owner_id: int,
+    ) -> None:
+        """Attach tenant to a room (capacity-checked), set public tenant ID."""
+        room = Room.query.filter_by(id=room_id, is_active=True).first()
+        if not room:
+            raise NotFoundError("Room", room_id)
+        if room.property_id != prop.id:
+            raise ValidationError(
+                "Selected room does not belong to this property",
+            )
+        caller = User.query.get(owner_id)
+        if caller and caller.role == "owner" and room.owner_id != owner_id:
+            raise PermissionError_("Room not owned by this owner")
+
+        occ = RoomTenant.query.filter_by(room_id=room_id, is_active=True).count()
+        if occ >= room.max_capacity:
+            raise ConflictError("No Vacancy Available")
+
+        # Single-active-room model: vacate other room assignments for this tenant
+        prev = RoomTenant.query.filter_by(
+            tenant_id=tenant.id, is_active=True
+        ).all()
+        for rt in prev:
+            rt.is_active = False
+            rt.vacated_at = now_utc()
+
+        existing_rt = RoomTenant.query.filter_by(
+            room_id=room_id, tenant_id=tenant.id
+        ).first()
+        if existing_rt:
+            if existing_rt.is_active:
+                raise ConflictError(
+                    "Tenant is already assigned to this room",
+                )
+            existing_rt.is_active = True
+            existing_rt.vacated_at = None
+            existing_rt.payment_status = "not_paid"
+        else:
+            db.session.add(
+                RoomTenant(
+                    room_id=room_id,
+                    tenant_id=tenant.id,
+                    payment_status="not_paid",
+                    is_active=True,
+                )
+            )
+
+        property_tenant.room_id = room.id
+        property_tenant.room_number = str(room.room_number)
+
+        if not tenant.tenant_public_id:
+            from services.tenant_id import generate_tenant_public_id
+
+            tenant.tenant_public_id = generate_tenant_public_id(prop, room)
 
     # ── Update ─────────────────────────────────────────────────────────────────
     def update(self, tenant_id: int, owner_id: int, data: dict) -> User:

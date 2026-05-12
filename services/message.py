@@ -14,7 +14,7 @@ import os
 import uuid
 from typing import Optional
 
-from models import db, User, Message, now_utc
+from models import db, User, Message, Room, RoomTenant, now_utc
 from services.base import BaseService
 from utils.errors import (
     ValidationError, NotFoundError, PermissionError_
@@ -31,6 +31,20 @@ AUDIO_EXTS = {"mp3", "ogg", "wav", "m4a", "aac"}
 def _room_key(uid1: int, uid2: int) -> str:
     """Stable, deterministic conversation key."""
     return f"dm_{min(uid1, uid2)}_{max(uid1, uid2)}"
+
+
+def rgrp_room_key(room_id: int) -> str:
+    """Shared room chat channel key (linked to rooms.id)."""
+    return f"rgrp_{room_id}"
+
+
+def parse_rgrp_room(room_id_str: Optional[str]) -> Optional[int]:
+    if not room_id_str or not room_id_str.startswith("rgrp_"):
+        return None
+    try:
+        return int(room_id_str.split("_", 1)[1])
+    except (ValueError, IndexError):
+        return None
 
 
 def _classify_ext(ext: str) -> str:
@@ -155,7 +169,14 @@ class MessageService(BaseService):
         if not caller:
             raise NotFoundError("User", caller_id)
 
-        if msg.sender_id != caller_id and caller.role != "admin":
+        allowed = msg.sender_id == caller_id or caller.role == "admin"
+        if not allowed and msg.room_id and msg.room_id.startswith("rgrp_"):
+            rid = parse_rgrp_room(msg.room_id)
+            if rid:
+                room = Room.query.get(rid)
+                if room and caller.role == "owner" and room.owner_id == caller_id:
+                    allowed = True
+        if not allowed:
             raise PermissionError_(
                 f"User {caller_id} cannot delete message {message_id}",
                 msg_id=message_id, caller_id=caller_id,
@@ -190,7 +211,14 @@ class MessageService(BaseService):
         if not msg or msg.is_deleted:
             raise NotFoundError("Message", message_id)
 
-        if msg.sender_id != caller_id:
+        allowed_edit = msg.sender_id == caller_id
+        if not allowed_edit and msg.room_id and msg.room_id.startswith("rgrp_"):
+            rid = parse_rgrp_room(msg.room_id)
+            if rid:
+                room = Room.query.get(rid)
+                if room and caller.role == "owner" and room.owner_id == caller_id:
+                    allowed_edit = True
+        if not allowed_edit:
             raise PermissionError_(
                 f"User {caller_id} cannot edit message {message_id}"
             )
@@ -250,6 +278,141 @@ class MessageService(BaseService):
             .filter_by(receiver_id=user_id, is_read=False, is_deleted=False)
             .count()
         )
+
+    # ── Shared room chat (roommates + owner) ──────────────────────────────────
+    def _guard_room_chat(self, user_id: int, room: Room) -> User:
+        u = User.query.get(user_id)
+        if not u:
+            raise NotFoundError("User", user_id)
+        if not u.is_active:
+            raise PermissionError_(f"Account {user_id} is deactivated")
+        if u.role == "admin":
+            return u
+        if u.role == "owner" and room.owner_id == user_id:
+            return u
+        if u.role == "tenant":
+            if not u.is_verified:
+                raise PermissionError_(
+                    "Complete verification to access property chat",
+                )
+            rt = RoomTenant.query.filter_by(
+                room_id=room.id, tenant_id=user_id, is_active=True
+            ).first()
+            if not rt:
+                raise PermissionError_("You are not assigned to this room")
+            return u
+        raise PermissionError_("Chat not allowed")
+
+    def send_room_text(self, sender_id: int, room_id: int, content: str) -> Message:
+        room = Room.query.filter_by(id=room_id, is_active=True).first()
+        if not room:
+            raise NotFoundError("Room", room_id)
+        self._guard_room_chat(sender_id, room)
+
+        if not content or not str(content).strip():
+            raise ValidationError("Message content must not be empty")
+        if len(content) > 4000:
+            raise ValidationError("Message must be at most 4,000 characters")
+
+        key = rgrp_room_key(room.id)
+        msg = Message(
+            sender_id=sender_id,
+            receiver_id=None,
+            property_id=room.property_id,
+            room_id=key,
+            content=content.strip(),
+        )
+        with self.transaction(f"room_text room={room_id} sender={sender_id}"):
+            db.session.add(msg)
+            db.session.flush()
+
+        self.log.info(
+            "Room message sent",
+            extra={"msg_id": msg.id, "room_id": room_id, "sender_id": sender_id},
+        )
+        return msg
+
+    def send_room_file(
+        self,
+        sender_id: int,
+        room_id: int,
+        file_obj,
+        upload_dir: str,
+        allowed_exts: set,
+        content: Optional[str] = None,
+    ) -> Message:
+        room = Room.query.filter_by(id=room_id, is_active=True).first()
+        if not room:
+            raise NotFoundError("Room", room_id)
+        self._guard_room_chat(sender_id, room)
+
+        if not file_obj or not file_obj.filename:
+            raise ValidationError("No file provided")
+
+        file_obj.seek(0, 2)
+        size = file_obj.tell()
+        file_obj.seek(0)
+        if size > MAX_FILE_BYTES:
+            raise ValidationError(f"File too large — max {MAX_FILE_BYTES // (1024*1024)} MB")
+
+        ext = file_obj.filename.rsplit(".", 1)[-1].lower() if "." in file_obj.filename else ""
+        if ext not in allowed_exts:
+            raise ValidationError(f"File type '.{ext}' is not allowed")
+
+        safe_name = f"{uuid.uuid4().hex}.{ext}"
+        os.makedirs(upload_dir, exist_ok=True)
+        dest_path = os.path.join(upload_dir, safe_name)
+        file_obj.save(dest_path)
+
+        file_url = f"/static/uploads/{safe_name}"
+        file_type = _classify_ext(ext)
+
+        key = rgrp_room_key(room.id)
+        msg = Message(
+            sender_id=sender_id,
+            receiver_id=None,
+            property_id=room.property_id,
+            room_id=key,
+            content=content.strip() if content and content.strip() else None,
+            file_url=file_url,
+            file_name=file_obj.filename[:255],
+            file_type=file_type,
+            file_size=size,
+        )
+        with self.transaction(f"room_file room={room_id} sender={sender_id}"):
+            db.session.add(msg)
+            db.session.flush()
+
+        self.log.info(
+            "Room file sent",
+            extra={
+                "msg_id": msg.id,
+                "room_id": room_id,
+                "sender_id": sender_id,
+                "file_type": file_type,
+            },
+        )
+        return msg
+
+    def load_room_messages(
+        self,
+        room_id: int,
+        before_id: Optional[int] = None,
+        limit: int = PAGE_SIZE,
+    ) -> list:
+        key = rgrp_room_key(room_id)
+        q = Message.query.filter_by(room_id=key, is_deleted=False)
+        if before_id:
+            q = q.filter(Message.id < before_id)
+        msgs = q.order_by(Message.created_at.desc()).limit(limit).all()
+        return list(reversed(msgs))
+
+    def assert_room_access(self, user_id: int, room_id: int) -> Room:
+        room = Room.query.filter_by(id=room_id, is_active=True).first()
+        if not room:
+            raise NotFoundError("Room", room_id)
+        self._guard_room_chat(user_id, room)
+        return room
 
     # ── Guards ─────────────────────────────────────────────────────────────────
     def _guard_sender(self, sender_id: int):

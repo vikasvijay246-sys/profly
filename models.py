@@ -53,6 +53,9 @@ class User(UserMixin, db.Model):
     photo         = db.Column(db.String(255), nullable=True)  # Path to profile photo
     proof_id      = db.Column(db.String(255), nullable=True)  # Path to ID proof document
     is_verified   = db.Column(db.Boolean, default=False, nullable=False)  # Verification status
+    # Professional tenant-facing ID (set when assigned to a room), e.g. TNR-SUNB-A203-4821
+    tenant_public_id = db.Column(db.String(48), nullable=True, unique=True)
+    designation    = db.Column(db.String(40), nullable=True)  # Student, Employee, etc.
     created_at    = db.Column(db.DateTime, default=now_utc, nullable=False)
     updated_at    = db.Column(db.DateTime, default=now_utc, onupdate=now_utc, nullable=False)
 
@@ -87,12 +90,15 @@ class User(UserMixin, db.Model):
         return {
             "id": self.id, "phone": self.phone, "full_name": self.full_name,
             "role": self.role, "is_active": self.is_active, "owner_id": self.owner_id,
+            "tenant_public_id": self.tenant_public_id,
+            "designation": self.designation,
             "created_at": to_ist(self.created_at),
         }
 
     __table_args__ = (
         Index("ix_users_phone", "phone"),
         Index("ix_users_role",  "role"),
+        Index("ix_users_tenant_public_id", "tenant_public_id"),
         # composite: fast owner→tenant queries
         Index("ix_users_owner_role", "owner_id", "role"),
     )
@@ -120,6 +126,8 @@ class Property(db.Model):
                                db.ForeignKey("users.id", ondelete="CASCADE"),
                                nullable=False)
     is_deleted    = db.Column(db.Boolean, default=False, nullable=False)
+    # Short code for tenant IDs and search (e.g. SUNB, PG02); optional, auto-derived if empty
+    short_code    = db.Column(db.String(16), nullable=True)
     created_at    = db.Column(db.DateTime, default=now_utc)
     updated_at    = db.Column(db.DateTime, default=now_utc, onupdate=now_utc)
 
@@ -285,7 +293,7 @@ class Room(db.Model):
                                    cascade="all, delete-orphan", lazy="dynamic")
 
     def get_occupancy(self):
-        return self.room_tenants.filter_by().count()
+        return self.room_tenants.filter_by(is_active=True).count()
 
     def get_is_full(self):
         return self.get_occupancy() >= self.max_capacity
@@ -371,7 +379,10 @@ class Message(db.Model):
     receiver_id = db.Column(db.Integer,
                              db.ForeignKey("users.id", ondelete="CASCADE"),
                              nullable=True)
-    # room_id = "dm_{min_id}_{max_id}" — conversation key
+    property_id = db.Column(db.Integer,
+                             db.ForeignKey("properties.id", ondelete="SET NULL"),
+                             nullable=True)
+    # room_id = "dm_{min}_{max}" for DMs, or "rgrp_{room_id}" for shared room chat
     room_id     = db.Column(db.String(100), nullable=True)
     content     = db.Column(db.Text,        nullable=True)
     # File fields
@@ -392,7 +403,11 @@ class Message(db.Model):
             "id": self.id,
             "sender_id":   self.sender_id,
             "sender_name": self.sender.full_name if self.sender else "?",
+            "sender_tenant_code": (
+                self.sender.tenant_public_id if self.sender else None
+            ),
             "receiver_id": self.receiver_id,
+            "property_id": self.property_id,
             "room_id":     self.room_id,
             "content":     self.content,
             "file_url":    self.file_url,

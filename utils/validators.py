@@ -232,12 +232,37 @@ def require_int_range(value, field: str, min_val: int, max_val: int) -> int:
 
 
 # ── Composite validators (used directly by service layer) ─────────────────────
+VALID_TENANT_DESIGNATIONS = frozenset(
+    {"student", "employee", "intern", "freelancer", "other"}
+)
+
+
+def optional_designation(value, field: str = "designation") -> Optional[str]:
+    """Occupation label e.g. Student, Employee."""
+    if value is None or str(value).strip() == "":
+        return None
+    s = str(value).strip().lower()
+    if s not in VALID_TENANT_DESIGNATIONS:
+        raise ValidationError(
+            f"{field} must be one of: Student, Employee, Intern, Freelancer, Other"
+        )
+    _labels = {
+        "student": "Student",
+        "employee": "Employee",
+        "intern": "Intern",
+        "freelancer": "Freelancer",
+        "other": "Other",
+    }
+    return _labels[s]
+
+
 def validate_create_tenant(form: dict) -> dict:
     """Validate all fields required to create a new tenant account."""
     return {
         "phone":     require_phone(form.get("phone"), "phone"),
         "full_name": require_string(form.get("full_name"), "full_name", max_len=MAX_NAME_LEN),
         "password":  require_password(form.get("password"), "password"),
+        "designation": optional_designation(form.get("designation")),
     }
 
 

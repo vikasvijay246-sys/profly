@@ -34,7 +34,7 @@
   <div class="table-wrap">
     <table class="table">
       <thead>
-        <tr><th>Tenant</th><th>Month</th><th>Amount</th><th>Status</th><th>Due</th><th>Paid At</th><th>Txn</th><th>Actions</th></tr>
+        <tr><th>Tenant</th><th>Tenant ID</th><th>Month</th><th>Amount</th><th>Status</th><th>Due</th><th>Paid At</th><th>Txn</th><th>Actions</th></tr>
       </thead>
       <tbody>
         {% for p in payments %}
@@ -45,6 +45,7 @@
               {{ p.tenant.full_name if p.tenant else '—' }}
             </div>
           </td>
+          <td class="font-mono text-muted" style="font-size:11px">{{ p.tenant.tenant_public_id if p.tenant and p.tenant.tenant_public_id else '—' }}</td>
           <td><span class="month-tag">{{ p.rent_month or '—' }}</span></td>
           <td><strong>₹{{ "{:,.0f}".format(p.amount) }}</strong></td>
           <td>
@@ -73,7 +74,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="8" class="text-center text-muted py-32">No payments found.</td></tr>
+        <tr><td colspan="9" class="text-center text-muted py-32">No payments found.</td></tr>
         {% endfor %}
       </tbody>
     </table>

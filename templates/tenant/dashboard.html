@@ -3,6 +3,9 @@
 {% block page_title %}My Dashboard{% endblock %}
 
 {% block content %}
+{% if current_user.tenant_public_id %}
+<p class="font-mono text-muted" style="font-size:13px;margin-bottom:14px">Tenant ID: <strong>{{ current_user.tenant_public_id }}</strong></p>
+{% endif %}
 <!-- Stats -->
 <div class="stats-grid">
   <div class="stat-card">

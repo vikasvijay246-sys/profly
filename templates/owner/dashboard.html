@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}{% if current_property %}{{ current_property.name }} Dashboard{% else %}Owner Dashboard{% endif %} — PropFlow{% endblock %}
-{% block page_title %}{% if current_property %}{{ current_property.name }} Dashboard{% else %}Dashboard{% endif %}{% endblock %}
+{% block title %}{% if current_property %}{{ current_property.name }}{% else %}Owner Dashboard{% endif %} — PropFlow{% endblock %}
+{% block page_title %}{% if current_property %}  {% else %}Dashboard{% endif %}{% endblock %}
 
 {% block content %}
 {% if current_property %}

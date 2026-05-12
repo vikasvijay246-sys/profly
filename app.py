@@ -13,6 +13,7 @@ from config import Config
 from models import db, User
 from utils.logger import configure_logging, get_logger
 from utils.errors import AppError
+from engineio import json as eio_json
 
 log = get_logger(__name__)
 socketio = SocketIO()

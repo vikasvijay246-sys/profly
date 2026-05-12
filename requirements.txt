@@ -2,6 +2,8 @@ Flask==3.0.3
 Flask-Login==0.6.3
 Flask-SQLAlchemy==3.1.1
 Flask-SocketIO==5.3.6
+python-SocketIO==5.11.4
+python-engineIO==4.9.1
 SQLAlchemy==2.0.30
 Werkzeug==3.0.3
 psycopg2-binary==2.9.10

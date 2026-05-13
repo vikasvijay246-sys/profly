@@ -5,6 +5,7 @@
 {% block content %}
 <style>
 .property-selection {
+  
   max-width: 1080px;
   margin: 0 auto;
   padding: 12px;
@@ -12,7 +13,10 @@
 }
 
 .header {
-  background: linear-gradient(140deg, rgba(237, 233, 254, 0.78) 0%, rgba(224, 242, 254, 0.78) 100%);
+  position: sticky;
+  top: 53px;
+  z-index: 1000;
+  background: linear-gradient(140deg, rgba(106, 185, 216, 0.78) 0%, rgba(224, 242, 254, 0.78) 100%);
   color: #1f2937;
   padding: 14px;
   border-radius: 16px;
@@ -23,6 +27,7 @@
 }
 
 .header-content {
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -39,7 +44,7 @@
 
 .greeting-section p {
   margin: 5px 0 0;
-  color: #64748b;
+  color: #284a7a;
   font-size: 0.84rem;
   font-weight: 400;
 }
@@ -51,19 +56,20 @@
 
 .header-btn {
   text-decoration: none;
-  background: linear-gradient(135deg, #7c83ff 0%, #6395ff 100%);
+  background: linear-gradient(135deg, #c153dd 0%, #6395ff 100%);
   border: 1px solid rgba(255, 255, 255, 0.55);
-  color: #f8faff;
+  color: #edf0ee;
   width: 100%;
   text-align: center;
   padding: 9px 14px;
   border-radius: 11px;
   text-decoration: none;
-  font-weight: 500;
-  font-size: 0.86rem;
-  box-shadow: 0 6px 14px rgba(99, 149, 255, 0.22);
+  font-weight: 5000;
+  font-size: 1.29rem;
+  box-shadow: 0 6px 14px rgba(202, 205, 212, 0.22);
   transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
+
 
 .header-btn:hover {
   text-decoration: none;
@@ -120,7 +126,7 @@
 
 .property-header {
   padding: 10px 11px 8px;
-  background: linear-gradient(140deg, rgba(238, 242, 255, 0.62), rgba(224, 242, 254, 0.6));
+  background: linear-gradient(140deg, rgba(246, 246, 248, 0.62), rgba(224, 242, 254, 0.6));
   color: #111827;
   position: relative;
   border-bottom: 1px solid rgba(191, 219, 254, 0.42);
@@ -209,15 +215,15 @@
 .open-btn1 {
   margin: 0;
   display: inline-block;
-  background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #3975a5 0%, #8addc8 100%);
+  color: #eff5f5;
   width: 100%;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(71, 135, 196, 0.55);
   padding: 7px 10px;
   border-radius: 9px;
   font-weight: 500;
-  font-size: 0.79rem;
+  font-size: 1.30rem;
   letter-spacing: 0.01em;
   text-decoration: none;
   box-shadow: 0 5px 14px rgba(96, 165, 250, 0.24);
@@ -306,7 +312,8 @@
     <div class="header-content">
      <div class="greeting-section">
         <h1>Good {{ 'Morning' if 6 <= now.hour < 12 else 'Afternoon' if 12 <= now.hour < 18 else 'Evening' }}, {{ current_user.full_name.split()[0] }}</h1>
-        <p>Manage all your properties from one place</p>
+        <!-- <p>Manage all your properties from one place</p> -->
+         
       </div>
       <div class="header-actions">
         <!-- <a href="#" class="header-btn">🔔 Notifications</a>
@@ -314,7 +321,7 @@
         <a href="{{ url_for('owner.properties') }}" class="header-btn">Manage Properties</a>
       </div>
     </div>
-  </div>
+  </div
 
   <!-- Global Summary -->
   <!--<div class="global-stats">
@@ -376,7 +383,7 @@
           <!-- <div class="revenue-info">
             ₹{{ "{:,.0f}".format(data.revenue_this_month) }} this month
           </div> -->
-          <div class="open-btn1">Open</div>
+          <div class="open-btn1">Select</div>
         </div>
       </a>
       {% endfor %}

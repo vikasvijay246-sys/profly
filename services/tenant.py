@@ -16,7 +16,7 @@ from services.base import BaseService
 from utils.errors import (
     ValidationError, NotFoundError, ConflictError, PermissionError_,
 )
-from utils.validators import validate_create_tenant
+from static.utils.validators import validate_create_tenant
 
 
 class TenantService(BaseService):

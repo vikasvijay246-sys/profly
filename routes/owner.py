@@ -9,7 +9,7 @@ from routes import role_required
 from services import (generate_monthly_rent, mark_overdue_payments,
                       owner_payment_summary, push_notification, fmt_month,
                       TenantService, PaymentService)
-from utils.validators import (validate_create_tenant, validate_create_payment,
+from static.utils.validators import (validate_create_tenant, validate_create_payment,
                                optional_date, optional_id, require_amount,
                                require_payment_type, optional_rent_month,
                                optional_string, require_payment_status,optional_amount)
@@ -183,7 +183,7 @@ def properties():
 @role_required("owner")
 def add_property():
     try:
-        from utils.validators import require_string, require_amount, optional_string
+        from static.utils.validators import require_string, require_amount, optional_string
         from services.tenant_id import slug_property_code
         name    = require_string(request.form.get("name"),    "name", max_len=200)
         address = require_string(request.form.get("address"), "address")
@@ -602,7 +602,7 @@ def delete_payment(pid):
 @login_required
 @role_required("owner")
 def send_notification():
-    from utils.validators import require_id, require_string
+    from static.utils.validators import require_id, require_string
     try:
         tid   = require_id(request.form.get("tenant_id"), "tenant_id")
         title = require_string(request.form.get("title"), "title", max_len=255)

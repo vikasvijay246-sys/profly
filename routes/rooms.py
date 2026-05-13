@@ -5,7 +5,7 @@ from models import User, Property, Room, RoomTenant
 from routes import role_required
 from services.room import RoomService
 from services.notification import NotificationService
-from utils.validators import validate_add_room, require_payment_status
+from static.utils.validators import validate_add_room, require_payment_status
 from utils.errors import AppError, api_ok, api_error
 
 rooms_bp  = Blueprint("rooms", __name__, url_prefix="/rooms")
@@ -91,7 +91,7 @@ def delete_room(rid):
 @login_required
 @role_required("owner", "admin")
 def assign_tenant(rid):
-    from utils.validators import optional_id
+    from static.utils.validators import optional_id
     tenant_id = optional_id(request.form.get("tenant_id"), "tenant_id")
     ok, msg, _ = _room_svc.assign_tenant(rid, tenant_id, current_user.id)
     flash(msg, "success" if ok else "error")

@@ -114,7 +114,7 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
-        from utils.schema_upgrade import upgrade_sqlite_schema
+        from static.utils.schema_upgrade import upgrade_sqlite_schema
         upgrade_sqlite_schema(db)
 
     log.info("PropFlow app created", extra={"db": app.config["SQLALCHEMY_DATABASE_URI"][:30]})

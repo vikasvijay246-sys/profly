@@ -22,7 +22,7 @@ from services.message import (
     rgrp_room_key,
     PAGE_SIZE,
 )
-from utils.validators import require_id
+from static.utils.validators import require_id
 from utils.errors import AppError, PermissionError_, api_error, api_ok, handle_unexpected
 
 chat_bp = Blueprint("chat", __name__, url_prefix="/chat")

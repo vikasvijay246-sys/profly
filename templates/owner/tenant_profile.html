@@ -16,6 +16,7 @@
         <!-- Profile Card -->
         <div class="profile-card">
             <div class="profile-header">
+                <div class="download"></div>
                 <!-- Profile Photo -->
                 <div class="profile-photo">
                     {% if tenant.photo %}
@@ -99,6 +100,20 @@
                                 <td class="fw-bold">Created:</td>
                                 <td>{{ tenant.created_at.strftime('%d-%m-%Y') if tenant.created_at else 'N/A' }}</td>
                             </tr>
+                            <!-- here iam gonna add property details -->
+                            <tr>
+                                <td class="fw-bold">Property:</td>
+                                <td>
+                                    {% set tenancy = tenant.tenancies.first() %}
+                                    {% if tenancy and tenancy.property %}
+                                        {{ tenancy.property.name }}
+                                    {% else %}
+                                        <span class="text-muted">Not assigned</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+
+                            <!-- end of the property details -->
                         </table>
                     </div>
 
@@ -254,9 +269,10 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-.profile-header {
+.profile-header{
     text-align: center;
     position: relative;
+    /* background-color: rgb(68, 197, 219); */
 }
 
 .profile-photo {

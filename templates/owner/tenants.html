@@ -11,7 +11,9 @@
 
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Name</th><th>Tenant ID</th><th>Phone</th><th>Status</th><th>Property</th><th>Actions</th></tr></thead>
+      <!-- <thead><tr><th>Name</th><th>Tenant ID</th><th>Phone</th><th>Status</th><th>Property</th><th>Actions</th></tr></thead> -->
+      <thead><tr><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+      
       <tbody>
         {% for t in tenants %}
         <tr>
@@ -30,16 +32,16 @@
               </a>
             </div>
           </td>
-          <td class="text-muted font-mono" style="font-size:11px">{{ t.tenant_public_id or '—' }}</td>
-          <td class="text-muted font-mono">{{ t.phone }}</td>
+          <!-- <td class="text-muted font-mono" style="font-size:11px">{{ t.tenant_public_id or '—' }}</td> -->
+          <!-- <td class="text-muted font-mono">{{ t.phone }}</td> -->
           <td><span class="badge badge-{{ 'completed' if t.is_active else 'overdue' }}">{{ 'Active' if t.is_active else 'Inactive' }}</span></td>
-          <td class="text-muted">
+          <!-- <td class="text-muted">
             {% set tenancy = t.tenancies.first() %}
             {% if tenancy and tenancy.property %}
               {{ tenancy.property.name }}
               {% if tenancy.room_number %}<span class="text-muted" style="font-size:11px"> · R{{ tenancy.room_number }}</span>{% endif %}
             {% else %}—{% endif %}
-          </td>
+          </td> -->
           <td>
             <div class="action-btns">
               <button class="btn btn-ghost btn-xs" onclick='openEditTenant({{ t.to_dict()|tojson }})'>Edit</button>
@@ -91,22 +93,31 @@
           <span class="form-hint">Photo ID or PDF (max 5MB)</span>
         </div>
         <div class="form-group span-2"><hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0"/></div>
-        <div class="form-group span-2">
+        <div class="form-group span-2" style="position: relative; overflow: visible; ">
           <label class="form-label">Designation / Occupation</label>
-          <select name="designation" class="form-input">
-            <option value="">— Select —</option>
+          <select for="desi" name="designation" class="form-input" >
             <option value="student">Student</option>
             <option value="employee">Employee</option>
             <option value="intern">Intern</option>
             <option value="freelancer">Freelancer</option>
-            <option value="other">Other</option>
+            <option value="other" id="desi">Other</option>
+            <option value=""><input type="text" for="" name="designation" placeholder="Enter designation" class="form-input"/></option>
           </select>
+          
+          <!-- <input type="text" name="designation"  value="" class="form-input" placeholder="Enter designation" style="margin-top:8px"/> -->
+          
         </div>
         <div class="form-group span-2">
           <label class="form-label">Assign to Property <span class="text-muted">(optional)</span></label>
           <select name="property_id" id="addTenantProperty" class="form-input" onchange="loadRoomsForAddTenant(this.value)">
             <option value="">— No property —</option>
-            {% for p in properties %}<option value="{{ p.id }}">{{ p.name }} (₹{{ "%.0f"|format(p.monthly_rent) }}/mo)</option>{% endfor %}
+            {% for p in properties %}
+            {%if current_property and current_property.id == p.id %}
+            <option value="{{ p.id }}" selected>{{ p.name }} (₹{{ "%.0f"|format(p.monthly_rent) }}/mo)</option>
+            {% else %}
+            <option value="{{ p.id }}">{{ p.name }} (₹{{ "%.0f"|format(p.monthly_rent) }}/mo)</option>
+            {% endif %}
+            {% endfor %}
           </select>
         </div>
         <div class="form-group span-2">
@@ -169,6 +180,10 @@
 {% endblock %}
 
 {% block scripts %}
+
+
+
+
 <script>
 async function loadRoomsForAddTenant(propertyId) {
   const roomSel = document.getElementById('addTenantRoom');
@@ -205,5 +220,6 @@ function openEditTenant(t) {
   document.getElementById('editTenantForm').action = `/owner/tenants/${t.id}/edit`;
   openModal('editTenantModal');
 }
+
 </script>
 {% endblock %}
